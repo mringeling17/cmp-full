@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { ChevronDown, Check } from '@lucide/svelte';
 
@@ -33,12 +32,12 @@
 </script>
 
 <Popover.Popover bind:open>
-	<Popover.PopoverTrigger>
+	<Popover.PopoverTrigger
+		class="inline-flex h-9 min-w-[140px] items-center justify-between gap-1 rounded-md border border-input bg-background px-3 text-sm shadow-xs hover:bg-accent hover:text-accent-foreground cursor-pointer"
+	>
 		{#snippet children()}
-			<Button variant="outline" size="sm" class="h-9 justify-between gap-1 min-w-[140px]">
-				<span class="truncate text-xs">{displayText}</span>
-				<ChevronDown class="h-3 w-3 opacity-50" />
-			</Button>
+			<span class="truncate text-xs">{displayText}</span>
+			<ChevronDown class="h-3 w-3 opacity-50" />
 		{/snippet}
 	</Popover.PopoverTrigger>
 	<Popover.PopoverContent class="w-[220px] p-0" align="start">

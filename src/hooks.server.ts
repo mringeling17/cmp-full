@@ -20,14 +20,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 	);
 
 	const {
-		data: { session }
-	} = await event.locals.supabase.auth.getSession();
-	event.locals.session = session;
-
-	const {
 		data: { user }
 	} = await event.locals.supabase.auth.getUser();
 	event.locals.user = user;
+
+	// Derive session only if user is authenticated (avoids getSession() insecurity warning)
+	if (user) {
+		const {
+			data: { session }
+		} = await event.locals.supabase.auth.getSession();
+		event.locals.session = session;
+	} else {
+		event.locals.session = null;
+	}
 
 	return resolve(event, {
 		filterSerializedResponseHeaders(name) {
