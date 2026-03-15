@@ -9,9 +9,8 @@
 
 	let { children } = $props();
 
-	const supabase = createSupabaseBrowserClient();
-
 	onMount(() => {
+		const supabase = createSupabaseBrowserClient();
 		const {
 			data: { subscription }
 		} = supabase.auth.onAuthStateChange((event) => {
