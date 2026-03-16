@@ -192,6 +192,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			success: true,
 			created: results.created,
 			updated: results.updated,
+			skipped: results.skipped,
 			errors: results.errors,
 			outputPath,
 			country,

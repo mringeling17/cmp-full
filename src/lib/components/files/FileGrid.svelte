@@ -166,16 +166,16 @@
 					handleDownload(params.data);
 				});
 
-				// Process Excel button - only for unprocessed invoice_summary files
+				// Process Excel button - for invoice_summary files (processed or not)
 				if (
 					params.data.file_type === 'invoice_summary' &&
-					params.data.processed !== true &&
 					onProcessExcel
 				) {
 					const processExcelBtn = document.createElement('button');
-					processExcelBtn.textContent = 'Procesar Excel';
+					const isReprocess = params.data.processed === true;
+					processExcelBtn.textContent = isReprocess ? 'Reprocesar' : 'Procesar Excel';
 					processExcelBtn.style.cssText =
-						'padding: 2px 8px; font-size: 12px; border-radius: 4px; border: 1px solid #3b82f6; background: #eff6ff; color: #1d4ed8; cursor: pointer; font-weight: 500;';
+						`padding: 2px 8px; font-size: 12px; border-radius: 4px; border: 1px solid ${isReprocess ? '#f59e0b' : '#3b82f6'}; background: ${isReprocess ? '#fffbeb' : '#eff6ff'}; color: ${isReprocess ? '#92400e' : '#1d4ed8'}; cursor: pointer; font-weight: 500;`;
 					processExcelBtn.addEventListener('click', (e) => {
 						e.stopPropagation();
 						onProcessExcel(params.data);

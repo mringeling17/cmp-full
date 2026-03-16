@@ -44,9 +44,17 @@
 					outputPath: data.outputPath,
 					totalRows: data.totalRows
 				};
-				toast.success(
-					`Procesado: ${data.created} creadas, ${data.updated} actualizadas`
-				);
+				if (data.totalRows === 0) {
+					toast.warning('El archivo no contiene filas válidas para procesar');
+				} else if (data.errors?.length > 0) {
+					toast.warning(
+						`Procesado con errores: ${data.created} creadas, ${data.updated} actualizadas, ${data.errors.length} errores`
+					);
+				} else {
+					toast.success(
+						`Procesado: ${data.created} creadas, ${data.updated} actualizadas (${data.totalRows} filas, país: ${data.country})`
+					);
+				}
 				onProcessed?.();
 			} else {
 				toast.error(`Error: ${data.error}`);
