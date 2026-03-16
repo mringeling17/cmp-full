@@ -125,10 +125,12 @@ export function parseInvoiceSummary(
 	let headerYear: number | null = null;
 	const dateFromCell = sheet['B4'];
 	if (dateFromCell && typeof dateFromCell.v === 'number') {
-		const parsed = XLSX.SSF.parse_date_code(dateFromCell.v);
-		if (parsed && parsed.y >= 2020 && parsed.y <= 2100) {
-			headerMonth = parsed.m;
-			headerYear = parsed.y;
+		// Convert Excel serial date to JS Date (Excel epoch: 1900-01-01, with the off-by-one bug)
+		const excelDate = new Date((dateFromCell.v - 25569) * 86400 * 1000);
+		const y = excelDate.getUTCFullYear();
+		if (y >= 2020 && y <= 2100) {
+			headerMonth = excelDate.getUTCMonth() + 1;
+			headerYear = y;
 		}
 	}
 
