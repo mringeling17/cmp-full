@@ -120,6 +120,18 @@ export function parseInvoiceSummary(
 	const sheet = workbook.Sheets['Invoice Summary'];
 	if (!sheet) throw new Error('Sheet "Invoice Summary" not found');
 
+	// Extract month/year from "Date From" cell (B4) which is an Excel serial date
+	let headerMonth: number | null = null;
+	let headerYear: number | null = null;
+	const dateFromCell = sheet['B4'];
+	if (dateFromCell && typeof dateFromCell.v === 'number') {
+		const parsed = XLSX.SSF.parse_date_code(dateFromCell.v);
+		if (parsed && parsed.y >= 2020 && parsed.y <= 2100) {
+			headerMonth = parsed.m;
+			headerYear = parsed.y;
+		}
+	}
+
 	// Read with header at row 6 (skip 5 rows)
 	const rawData: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { range: 5 });
 
@@ -205,8 +217,9 @@ export function parseInvoiceSummary(
 			? getCountryFromCurrency(rows[0].currency)
 			: 'generico';
 
-	const month = extractMonthFromFilename(filename);
-	const year = extractYearFromFilename(filename);
+	// Priority: Excel header dates > filename > current date
+	const month = headerMonth ?? extractMonthFromFilename(filename);
+	const year = headerYear ?? extractYearFromFilename(filename);
 
 	return { rows, country, month, year, errors };
 }
