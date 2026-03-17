@@ -16,12 +16,14 @@
 		invoices,
 		loading = false,
 		onSelectionChanged,
-		onSortChanged
+		onSortChanged,
+		onAdjust
 	}: {
 		invoices: InvoiceWithClient[];
 		loading?: boolean;
 		onSelectionChanged?: (selected: InvoiceWithClient[]) => void;
 		onSortChanged?: (field: string, direction: 'asc' | 'desc') => void;
+		onAdjust?: (invoice: InvoiceWithClient) => void;
 	} = $props();
 
 	let country = $state('ar');
@@ -85,6 +87,23 @@
 			width: 140,
 			editable: true,
 			cellStyle: { cursor: 'pointer' }
+		},
+		{
+			headerName: '',
+			width: 90,
+			sortable: false,
+			resizable: false,
+			cellRenderer: (params: { data: InvoiceWithClient }) => {
+				const btn = document.createElement('button');
+				btn.textContent = 'Ajustar';
+				btn.style.cssText =
+					'padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; border: 1px solid #d1d5db; background: white; cursor: pointer; color: #374151;';
+				btn.addEventListener('click', (e) => {
+					e.stopPropagation();
+					onAdjust?.(params.data);
+				});
+				return btn;
+			}
 		},
 		{
 			field: 'payment_status',

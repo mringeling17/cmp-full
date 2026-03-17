@@ -11,6 +11,7 @@
 	import InvoiceFilters from '$lib/components/invoices/InvoiceFilters.svelte';
 	import type { InvoiceFilterValues } from '$lib/components/invoices/InvoiceFilters.svelte';
 	import CreatePayment from '$lib/components/payments/CreatePayment.svelte';
+	import CreateAdjustment from '$lib/components/invoices/CreateAdjustment.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { ChevronLeft, ChevronRight, CreditCard } from '@lucide/svelte';
 
@@ -44,6 +45,10 @@
 
 	// Payment dialog state
 	let createPaymentOpen = $state(false);
+
+	// Adjustment dialog state
+	let adjustmentOpen = $state(false);
+	let adjustmentInvoice = $state<InvoiceWithClient | null>(null);
 
 	// Derive filter lists scoped to current country
 	const countryClients = $derived(
@@ -149,6 +154,15 @@
 		selectedInvoices = [];
 		loadInvoices();
 	}
+
+	function handleAdjust(invoice: InvoiceWithClient) {
+		adjustmentInvoice = invoice;
+		adjustmentOpen = true;
+	}
+
+	function handleAdjustmentCreated() {
+		loadInvoices();
+	}
 </script>
 
 <div class="space-y-4">
@@ -176,6 +190,7 @@
 		loading={$invoicesLoading}
 		onSelectionChanged={handleSelectionChanged}
 		onSortChanged={handleSortChanged}
+		onAdjust={handleAdjust}
 	/>
 
 	<!-- Pagination -->
@@ -237,4 +252,12 @@
 	{country}
 	onCreated={handlePaymentCreated}
 	onClose={() => (createPaymentOpen = false)}
+/>
+
+<!-- Create Adjustment Dialog -->
+<CreateAdjustment
+	bind:open={adjustmentOpen}
+	invoice={adjustmentInvoice}
+	{country}
+	onCreated={handleAdjustmentCreated}
 />

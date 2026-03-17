@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
 	import MultiSelect from './MultiSelect.svelte';
+	import MonthPicker from './MonthPicker.svelte';
 	import { filters, resetFilters, type FilterState } from '$lib/stores/filters';
 	import { RotateCcw } from '@lucide/svelte';
 
@@ -15,13 +15,12 @@
 		channels: { id: string; name: string }[];
 	} = $props();
 
-	// Default: last 3 months from current month
+	// Default: last 6 months from current month
 	function getDefaultMonths() {
 		const now = new Date();
 		const toYear = now.getFullYear();
 		const toMonth = now.getMonth() + 1;
-		// 3 months back
-		let fromMonth = toMonth - 2;
+		let fromMonth = toMonth - 5;
 		let fromYear = toYear;
 		if (fromMonth <= 0) {
 			fromMonth += 12;
@@ -84,12 +83,12 @@
 
 <div class="flex flex-wrap items-center gap-2">
 	<div class="flex items-center gap-1.5">
-		<label for="month-from" class="text-xs text-muted-foreground whitespace-nowrap">Desde</label>
-		<Input id="month-from" type="month" bind:value={monthFrom} class="h-9 w-[140px] text-xs" />
+		<label class="text-xs text-muted-foreground whitespace-nowrap">Desde</label>
+		<MonthPicker bind:value={monthFrom} />
 	</div>
 	<div class="flex items-center gap-1.5">
-		<label for="month-to" class="text-xs text-muted-foreground whitespace-nowrap">Hasta</label>
-		<Input id="month-to" type="month" bind:value={monthTo} class="h-9 w-[140px] text-xs" />
+		<label class="text-xs text-muted-foreground whitespace-nowrap">Hasta</label>
+		<MonthPicker bind:value={monthTo} />
 	</div>
 
 	<MultiSelect label="Clientes" items={clients} bind:selected={selectedClients} searchable={true} />

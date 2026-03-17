@@ -30,7 +30,7 @@
 		{/if}
 	</Card.CardHeader>
 	<Card.CardContent>
-		<div class="text-2xl font-bold">{value}</div>
+		<div class="font-bold" class:text-lg={value.length > 14} class:text-xl={value.length <= 14 && value.length > 10} class:text-2xl={value.length <= 10} title={value}>{value}</div>
 		{#if trend != null}
 			<p class="text-xs {trendColor} mt-1">
 				{trendIcon}{trend.toFixed(1)}% vs mismo periodo año anterior

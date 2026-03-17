@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { Input } from '$lib/components/ui/input/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import MonthPicker from './MonthPicker.svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import DashboardChart from './DashboardChart.svelte';
 	import MultiSelect from './MultiSelect.svelte';
@@ -225,12 +225,12 @@
 			<Card.CardContent>
 				<div class="flex items-center gap-2">
 					<div class="flex items-center gap-1.5">
-						<label for="pa-from" class="text-xs text-muted-foreground">Desde</label>
-						<Input id="pa-from" type="month" bind:value={periodAFrom} class="h-8 w-[140px] text-xs" />
+						<label class="text-xs text-muted-foreground">Desde</label>
+						<MonthPicker bind:value={periodAFrom} />
 					</div>
 					<div class="flex items-center gap-1.5">
-						<label for="pa-to" class="text-xs text-muted-foreground">Hasta</label>
-						<Input id="pa-to" type="month" bind:value={periodATo} class="h-8 w-[140px] text-xs" />
+						<label class="text-xs text-muted-foreground">Hasta</label>
+						<MonthPicker bind:value={periodATo} />
 					</div>
 				</div>
 			</Card.CardContent>
@@ -247,12 +247,12 @@
 			<Card.CardContent>
 				<div class="flex items-center gap-2">
 					<div class="flex items-center gap-1.5">
-						<label for="pb-from" class="text-xs text-muted-foreground">Desde</label>
-						<Input id="pb-from" type="month" bind:value={periodBFrom} class="h-8 w-[140px] text-xs" />
+						<label class="text-xs text-muted-foreground">Desde</label>
+						<MonthPicker bind:value={periodBFrom} />
 					</div>
 					<div class="flex items-center gap-1.5">
-						<label for="pb-to" class="text-xs text-muted-foreground">Hasta</label>
-						<Input id="pb-to" type="month" bind:value={periodBTo} class="h-8 w-[140px] text-xs" />
+						<label class="text-xs text-muted-foreground">Hasta</label>
+						<MonthPicker bind:value={periodBTo} />
 					</div>
 				</div>
 			</Card.CardContent>

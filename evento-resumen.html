@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumen Evento - Planificación</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #f5f0eb;
+            color: #2d2d2d;
+            line-height: 1.6;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+        header {
+            text-align: center;
+            padding: 50px 20px 30px;
+            background: linear-gradient(135deg, #2c3e2d, #4a6741);
+            color: white;
+            border-radius: 0 0 20px 20px;
+            margin-bottom: 30px;
+        }
+        header h1 { font-size: 2.2em; font-weight: 300; letter-spacing: 4px; text-transform: uppercase; }
+        header p { font-size: 1.1em; opacity: 0.85; margin-top: 8px; }
+        header .date {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 8px 24px;
+            border: 1px solid rgba(255,255,255,0.4);
+            border-radius: 30px;
+            font-size: 0.95em;
+            letter-spacing: 2px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        }
+        .section h2 {
+            font-size: 1.3em;
+            color: #4a6741;
+            border-bottom: 2px solid #e8e0d8;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        .section h3 {
+            font-size: 1.05em;
+            color: #6b5b4e;
+            margin: 18px 0 10px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        .info-item {
+            background: #faf8f5;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 3px solid #4a6741;
+        }
+        .info-item .label { font-size: 0.8em; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .info-item .value { font-size: 1.2em; font-weight: 600; color: #2d2d2d; margin-top: 3px; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        table thead th {
+            background: #4a6741;
+            color: white;
+            padding: 10px 14px;
+            text-align: left;
+            font-size: 0.85em;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        table thead th:first-child { border-radius: 8px 0 0 0; }
+        table thead th:last-child { border-radius: 0 8px 0 0; }
+        table tbody td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #f0ece7;
+        }
+        table tbody tr:hover { background: #faf8f5; }
+        table tbody tr:last-child td { border-bottom: none; }
+        .price { font-weight: 600; color: #4a6741; }
+        .store {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        .store-alvi { background: #e8f5e9; color: #2e7d32; }
+        .store-pedregal { background: #fff3e0; color: #e65100; }
+
+        .total-box {
+            background: linear-gradient(135deg, #2c3e2d, #4a6741);
+            color: white;
+            padding: 20px 25px;
+            border-radius: 12px;
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .total-box .total-label { font-size: 1em; text-transform: uppercase; letter-spacing: 2px; }
+        .total-box .total-value { font-size: 1.8em; font-weight: 300; }
+
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px;
+            top: 5px;
+            bottom: 5px;
+            width: 2px;
+            background: #d4cfc8;
+        }
+        .timeline-item {
+            position: relative;
+            margin-bottom: 18px;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -26px;
+            top: 6px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4a6741;
+            border: 2px solid white;
+            box-shadow: 0 0 0 2px #4a6741;
+        }
+        .timeline-item .time {
+            font-size: 0.8em;
+            color: #4a6741;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .timeline-item .desc { color: #555; margin-top: 2px; }
+        .timeline-item .desc em { color: #888; font-style: normal; font-size: 0.9em; }
+
+        .menu-included {
+            background: #faf8f5;
+            border-radius: 10px;
+            padding: 18px;
+            margin: 10px 0;
+        }
+        .menu-included h4 { color: #6b5b4e; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .menu-included ul { list-style: none; padding: 0; }
+        .menu-included li { padding: 4px 0; padding-left: 18px; position: relative; color: #555; }
+        .menu-included li::before { content: '·'; position: absolute; left: 4px; color: #4a6741; font-weight: bold; font-size: 1.4em; line-height: 1; }
+
+        .note {
+            background: #fffde7;
+            border-left: 3px solid #f9a825;
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            margin: 15px 0;
+            font-size: 0.92em;
+            color: #6d5e00;
+        }
+
+        .grand-total {
+            background: linear-gradient(135deg, #1a2e1b, #2c3e2d);
+            color: white;
+            padding: 30px;
+            border-radius: 16px;
+            text-align: center;
+            margin-top: 30px;
+        }
+        .grand-total h2 { color: white; border: none; margin-bottom: 20px; }
+        .grand-total table { margin: 0 auto; }
+        .grand-total table thead th { background: rgba(255,255,255,0.15); }
+        .grand-total table tbody td { border-color: rgba(255,255,255,0.1); color: white; }
+        .grand-total .price { color: #a5d6a7; }
+        .grand-total .final {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 2.2em;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+        .grand-total .final span { font-size: 0.5em; display: block; opacity: 0.7; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 5px; }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+            vertical-align: middle;
+        }
+        .badge-green { background: #e8f5e9; color: #2e7d32; }
+        .badge-blue { background: #e3f2fd; color: #1565c0; }
+        .badge-orange { background: #fff3e0; color: #e65100; }
+
+        .clima-box {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #e3f2fd;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        .clima-icon { font-size: 2.5em; }
+        .clima-info .temp { font-size: 1.3em; font-weight: 600; color: #1565c0; }
+        .clima-info .detail { font-size: 0.85em; color: #5a7a9a; }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: #aaa;
+            font-size: 0.85em;
+        }
+
+        @media (max-width: 600px) {
+            .info-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.6em; }
+            .section { padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Planificación Evento</h1>
+    <p>Resumen de compras y logística</p>
+    <div class="date">Sábado 28 de Marzo, 2026 · Linderos, Chile</div>
+</header>
+
+<div class="container">
+
+    <!-- DATOS GENERALES -->
+    <div class="section">
+        <h2>Datos Generales</h2>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="label">Invitados Cocktail</div>
+                <div class="value">180 personas</div>
+            </div>
+            <div class="info-item">
+                <div class="label">Invitados Fiesta (+extra)</div>
+                <div class="value">220 personas</div>
+            </div>
+            <div class="info-item">
+                <div class="label">Duración Cocktail</div>
+                <div class="value">1 hora 30 min</div>
+            </div>
+            <div class="info-item">
+                <div class="label">Clima estimado 7pm</div>
+                <div class="value">~22-25°C despejado</div>
+            </div>
+        </div>
+        <div class="note">
+            El 5% de los invitados (~9 personas) no consume alcohol. Se consideran opciones sin alcohol.
+        </div>
+    </div>
+
+    <!-- TIMELINE COCKTAIL -->
+    <div class="section">
+        <h2>Dinámica del Cocktail</h2>
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="time">Inicio</div>
+                <div class="desc">Copa de espumante de bienvenida + aguas + pisco sour</div>
+            </div>
+            <div class="timeline-item">
+                <div class="time">~45 min después</div>
+                <div class="desc">Se incorpora el resto del bar: michelada, mojito, aperol, ramazzotti, mango sour <br><em>Cerveza disponible por ~45 minutos</em></div>
+            </div>
+            <div class="timeline-item">
+                <div class="time">1:30 hrs</div>
+                <div class="desc">Fin del cocktail → paso a cena</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LO QUE INCLUYE EL LUGAR -->
+    <div class="section">
+        <h2>Incluido por el Lugar</h2>
+
+        <div class="menu-included">
+            <h4>Bar Cóctel (ilimitado)</h4>
+            <ul>
+                <li>Pisco Sour</li>
+                <li>Mango Sour</li>
+                <li>Mojito</li>
+                <li>Aperol</li>
+                <li>Ramazzotti</li>
+                <li>Espumante</li>
+                <li>Jugos naturales, aguas y bebidas</li>
+            </ul>
+        </div>
+
+        <div class="menu-included">
+            <h4>Cena</h4>
+            <ul>
+                <li><strong>Entrada 1:</strong> Roast beef con pebre de mango y salsa antigua de mostaza</li>
+                <li><strong>Entrada 2:</strong> Tulipa de salmón relleno de mascarpone sobre salsa thai, coronado con berros</li>
+                <li><strong>Fondo 1:</strong> Asado de tira con risotto de mote en salsa de queso</li>
+                <li><strong>Fondo 2:</strong> Corvina en costra de quinoa roja sobre risotto al pesto con camarones</li>
+            </ul>
+        </div>
+
+        <div class="menu-included">
+            <h4>Buffet de Postres</h4>
+            <ul>
+                <li>Mousse de maracuyá, chocolate, frambuesa</li>
+                <li>Mote con huesillo, leche asada, suspiro limeño</li>
+                <li>Terrina de papaya, frutas de estación</li>
+                <li>Tortas: chocolate guinda ácida, milhoja manjar nuez, chocolate blanco y negro, tres leches cheesecake</li>
+                <li>Tiramisú</li>
+            </ul>
+        </div>
+
+        <div class="menu-included">
+            <h4>Bar Abierto Fiesta (ilimitado)</h4>
+            <ul>
+                <li>Vodka Stolichnaya (ilimitado)</li>
+                <li>Ron Barceló Dorado (ilimitado)</li>
+                <li>Pisco Alto del Carmen 35° (ilimitado)</li>
+                <li>Espumante</li>
+                <li>Gin Beefeater: 1 cada 30 invitados</li>
+                <li>Whisky Johnny Walker Etiqueta Roja: 1 cada 30 personas</li>
+                <li>Jugos naturales, bebidas, agua mineral</li>
+            </ul>
+        </div>
+
+        <div class="menu-included">
+            <h4>Trasnoche (incluida)</h4>
+            <ul>
+                <li>Sopa de gallina o crema de zapallo</li>
+                <li>Mini barros luquitos</li>
+            </ul>
+        </div>
+
+        <div class="menu-included">
+            <h4>Brindis</h4>
+            <ul>
+                <li>Champagne</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- CERVEZAS -->
+    <div class="section">
+        <h2>Cervezas + Michelada <span class="badge badge-green">Por nuestra cuenta</span></h2>
+
+        <h3>Cervezas</h3>
+        <p style="color: #888; font-size: 0.9em; margin-bottom: 12px;">Comprar en Alvi (precio socio, 12+ unidades)</p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cantidad</th>
+                    <th>Unitario</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Royal Guard Botella 355cc <span class="store store-alvi">Alvi</span></td>
+                    <td>85</td>
+                    <td>$790</td>
+                    <td class="price">$67.150</td>
+                </tr>
+                <tr>
+                    <td>Corona Cero Botella 330cc (sin alcohol) <span class="store store-alvi">Alvi</span></td>
+                    <td>10</td>
+                    <td>$990</td>
+                    <td class="price">$9.900</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Insumos Michelada</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Insumo</th>
+                    <th>Cantidad</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Jugo limón Traverso 1L</td>
+                    <td>2 botellas</td>
+                    <td class="price">~$3.000</td>
+                </tr>
+                <tr>
+                    <td>Sal gruesa</td>
+                    <td>1 kg</td>
+                    <td class="price">~$1.500</td>
+                </tr>
+                <tr>
+                    <td>Salsa inglesa (Lea & Perrins)</td>
+                    <td>2 botellas</td>
+                    <td class="price">~$5.000</td>
+                </tr>
+                <tr>
+                    <td>Tabasco</td>
+                    <td>2 botellas</td>
+                    <td class="price">~$5.000</td>
+                </tr>
+                <tr>
+                    <td>Ají en pasta / pimienta</td>
+                    <td>1 c/u</td>
+                    <td class="price">~$2.500</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="total-box">
+            <div class="total-label">Total Cervezas + Michelada</div>
+            <div class="total-value">$94.050</div>
+        </div>
+
+        <div class="note">
+            Cálculo: 180 personas, ~30% prefiere cerveza con clima cálido, cerveza disponible ~45 min del cocktail. ~51 personas x 1.5 cervezas = ~77 cervezas. Se compran 85 + 10 sin alcohol como colchón.
+        </div>
+    </div>
+
+    <!-- BAJÓN / TORNABODA -->
+    <div class="section">
+        <h2>Bajón / Tornaboda <span class="badge badge-orange">Por nuestra cuenta</span></h2>
+
+        <p style="color: #888; font-size: 0.9em; margin-bottom: 5px;">Para ~150-170 personas (gente joven). Complementa la trasnoche incluida (sopa + barros luquitos).</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Tienda</th>
+                    <th>Cantidad</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Nuggets Super Pollo 1kg (~50 un.)</td>
+                    <td><span class="store store-alvi">Alvi</span></td>
+                    <td>4 bolsas (~200 nuggets)</td>
+                    <td class="price">$17.880</td>
+                </tr>
+                <tr>
+                    <td>Papas prefritas 2.5kg Olympia</td>
+                    <td><span class="store store-pedregal">Pedregal</span></td>
+                    <td>2 bolsas (5 kg)</td>
+                    <td class="price">$8.980</td>
+                </tr>
+                <tr>
+                    <td>Empanadas raviol jamón/queso 24 un.</td>
+                    <td><span class="store store-pedregal">Pedregal</span></td>
+                    <td>4 bandejas (96 un.)</td>
+                    <td class="price">$8.760</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="total-box">
+            <div class="total-label">Total Bajón</div>
+            <div class="total-value">$35.620</div>
+        </div>
+
+        <div class="note">
+            ~376 porciones variadas para 170 personas (~2.2 por persona). Suficiente considerando que es complemento a la trasnoche incluida. Lo que sobre se guarda congelado sin problema.
+        </div>
+    </div>
+
+    <!-- RESUMEN TOTAL -->
+    <div class="grand-total">
+        <h2>Resumen Total de Compras</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Categoría</th>
+                    <th>Tienda</th>
+                    <th>Costo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Cervezas (85 RG + 10 Corona Cero)</td>
+                    <td><span class="store store-alvi">Alvi</span></td>
+                    <td class="price">$77.050</td>
+                </tr>
+                <tr>
+                    <td>Insumos michelada</td>
+                    <td>Supermercado</td>
+                    <td class="price">~$17.000</td>
+                </tr>
+                <tr>
+                    <td>Nuggets Super Pollo 1kg x4</td>
+                    <td><span class="store store-alvi">Alvi</span></td>
+                    <td class="price">$17.880</td>
+                </tr>
+                <tr>
+                    <td>Papas prefritas 2.5kg x2</td>
+                    <td><span class="store store-pedregal">Pedregal</span></td>
+                    <td class="price">$8.980</td>
+                </tr>
+                <tr>
+                    <td>Empanadas raviol 24un x4</td>
+                    <td><span class="store store-pedregal">Pedregal</span></td>
+                    <td class="price">$8.760</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="final">
+            <span>Total Estimado</span>
+            $129.670
+        </div>
+    </div>
+
+    <!-- LISTA DE COMPRAS -->
+    <div class="section" style="margin-top: 24px;">
+        <h2>Lista de Compras por Tienda</h2>
+
+        <h3><span class="store store-alvi" style="font-size: 1em; padding: 4px 14px;">Alvi</span> (requiere tarjeta socio)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cant.</th>
+                    <th>Precio</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Royal Guard Botella 355cc (comprar 12+ para precio socio)</td>
+                    <td>85</td>
+                    <td class="price">$67.150</td>
+                </tr>
+                <tr>
+                    <td>Corona Cero Botella 330cc (comprar 12+ para precio socio)</td>
+                    <td>10</td>
+                    <td class="price">$9.900</td>
+                </tr>
+                <tr>
+                    <td>Nuggets Super Pollo 1kg (comprar 3+ para precio socio $4.470)</td>
+                    <td>4</td>
+                    <td class="price">$17.880</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="total-box">
+            <div class="total-label">Subtotal Alvi</div>
+            <div class="total-value">$94.930</div>
+        </div>
+
+        <h3 style="margin-top: 25px;"><span class="store store-pedregal" style="font-size: 1em; padding: 4px 14px;">Tienda del Pedregal</span></h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Producto</th>
+                    <th>Cant.</th>
+                    <th>Precio</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Papas prefritas 2.5kg Olympia</td>
+                    <td>2</td>
+                    <td class="price">$8.980</td>
+                </tr>
+                <tr>
+                    <td>Empanadas raviol jamón/queso 24 un. Rapifresh</td>
+                    <td>4</td>
+                    <td class="price">$8.760</td>
+                </tr>
+            </tbody>
+        </table>
+        <div class="total-box">
+            <div class="total-label">Subtotal Pedregal</div>
+            <div class="total-value">$17.740</div>
+        </div>
+
+        <h3 style="margin-top: 25px;"><span class="badge badge-blue" style="font-size: 1em; padding: 4px 14px;">Supermercado (cualquiera)</span></h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Insumo Michelada</th>
+                    <th>Cant.</th>
+                    <th>Precio est.</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Jugo limón Traverso 1L</td><td>2</td><td class="price">~$3.000</td></tr>
+                <tr><td>Sal gruesa</td><td>1 kg</td><td class="price">~$1.500</td></tr>
+                <tr><td>Salsa inglesa</td><td>2 bot.</td><td class="price">~$5.000</td></tr>
+                <tr><td>Tabasco</td><td>2 bot.</td><td class="price">~$5.000</td></tr>
+                <tr><td>Ají en pasta / pimienta</td><td>1 c/u</td><td class="price">~$2.500</td></tr>
+            </tbody>
+        </table>
+        <div class="total-box">
+            <div class="total-label">Subtotal Insumos</div>
+            <div class="total-value">~$17.000</div>
+        </div>
+    </div>
+
+</div>
+
+<footer>
+    Generado el 17 de marzo de 2026 · Precios referenciales sujetos a disponibilidad
+</footer>
+
+</body>
+</html>
