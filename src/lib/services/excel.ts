@@ -135,7 +135,16 @@ export function parseInvoiceSummary(
 	}
 
 	// Read with header at row 6 (skip 5 rows)
-	const rawData: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { range: 5 });
+	const rawJsonData: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { range: 5 });
+
+	// Normalize column names: trim whitespace from keys
+	const rawData = rawJsonData.map((row) => {
+		const normalized: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(row)) {
+			normalized[key.trim()] = value;
+		}
+		return normalized;
+	});
 
 	const errors: string[] = [];
 	const rows: ParsedInvoiceRow[] = [];
@@ -191,7 +200,7 @@ export function parseInvoiceSummary(
 		rows.push({
 			invoiceNumber,
 			invoiceDate: str_(row['Invoice Date']),
-			grossValue: parseFloat_(row['Gross Invoice ']), // NOTE: trailing space!
+			grossValue: parseFloat_(row['Gross Invoice']),
 			netValue: parseFloat_(row['Net Invoice']),
 			channel: str_(row['Channel']),
 			agency: String(agencyRaw).trim(),
