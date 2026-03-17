@@ -23,8 +23,8 @@
 		agencies
 	}: {
 		invoices: any[];
-		clients: { id: string; name: string; country: string }[];
-		agencies: { id: string; name: string; country: string }[];
+		clients: { id: string; name: string; country: string | null }[];
+		agencies: { id: string; name: string; country: string | null }[];
 	} = $props();
 
 	let country = $state('ar');
