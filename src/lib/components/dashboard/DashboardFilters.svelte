@@ -15,17 +15,48 @@
 		channels: { id: string; name: string }[];
 	} = $props();
 
-	let dateFrom = $state<string>('');
-	let dateTo = $state<string>('');
+	// Default: last 3 months from current month
+	function getDefaultMonths() {
+		const now = new Date();
+		const toYear = now.getFullYear();
+		const toMonth = now.getMonth() + 1;
+		// 3 months back
+		let fromMonth = toMonth - 2;
+		let fromYear = toYear;
+		if (fromMonth <= 0) {
+			fromMonth += 12;
+			fromYear -= 1;
+		}
+		return {
+			from: `${fromYear}-${String(fromMonth).padStart(2, '0')}`,
+			to: `${toYear}-${String(toMonth).padStart(2, '0')}`
+		};
+	}
+
+	const defaults = getDefaultMonths();
+	let monthFrom = $state<string>(defaults.from);
+	let monthTo = $state<string>(defaults.to);
 	let selectedClients = $state<string[]>([]);
 	let selectedAgencies = $state<string[]>([]);
 	let selectedChannels = $state<string[]>([]);
 
+	function monthToDateFrom(month: string): string | null {
+		if (!month) return null;
+		return `${month}-01`;
+	}
+
+	function monthToDateTo(month: string): string | null {
+		if (!month) return null;
+		const [y, m] = month.split('-').map(Number);
+		const lastDay = new Date(y, m, 0).getDate();
+		return `${month}-${String(lastDay).padStart(2, '0')}`;
+	}
+
 	// Sync local state to store
 	$effect(() => {
 		const update: FilterState = {
-			dateFrom: dateFrom || null,
-			dateTo: dateTo || null,
+			dateFrom: monthToDateFrom(monthFrom),
+			dateTo: monthToDateTo(monthTo),
 			clientIds: selectedClients,
 			agencyIds: selectedAgencies,
 			channels: selectedChannels
@@ -34,17 +65,17 @@
 	});
 
 	function handleReset() {
-		dateFrom = '';
-		dateTo = '';
+		const d = getDefaultMonths();
+		monthFrom = d.from;
+		monthTo = d.to;
 		selectedClients = [];
 		selectedAgencies = [];
 		selectedChannels = [];
-		resetFilters();
 	}
 
 	const hasActiveFilters = $derived(
-		dateFrom !== '' ||
-			dateTo !== '' ||
+		monthFrom !== defaults.from ||
+			monthTo !== defaults.to ||
 			selectedClients.length > 0 ||
 			selectedAgencies.length > 0 ||
 			selectedChannels.length > 0
@@ -53,12 +84,12 @@
 
 <div class="flex flex-wrap items-center gap-2">
 	<div class="flex items-center gap-1.5">
-		<label for="date-from" class="text-xs text-muted-foreground whitespace-nowrap">Desde</label>
-		<Input id="date-from" type="date" bind:value={dateFrom} class="h-9 w-[140px] text-xs" />
+		<label for="month-from" class="text-xs text-muted-foreground whitespace-nowrap">Desde</label>
+		<Input id="month-from" type="month" bind:value={monthFrom} class="h-9 w-[140px] text-xs" />
 	</div>
 	<div class="flex items-center gap-1.5">
-		<label for="date-to" class="text-xs text-muted-foreground whitespace-nowrap">Hasta</label>
-		<Input id="date-to" type="date" bind:value={dateTo} class="h-9 w-[140px] text-xs" />
+		<label for="month-to" class="text-xs text-muted-foreground whitespace-nowrap">Hasta</label>
+		<Input id="month-to" type="month" bind:value={monthTo} class="h-9 w-[140px] text-xs" />
 	</div>
 
 	<MultiSelect label="Clientes" items={clients} bind:selected={selectedClients} searchable={true} />

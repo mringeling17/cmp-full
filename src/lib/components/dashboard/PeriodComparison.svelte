@@ -30,13 +30,26 @@
 	let country = $state('ar');
 	selectedCountry.subscribe((v) => (country = v));
 
-	// Period A state
+	// Period A state (month format: YYYY-MM)
 	let periodAFrom = $state('');
 	let periodATo = $state('');
 
-	// Period B state
+	// Period B state (month format: YYYY-MM)
 	let periodBFrom = $state('');
 	let periodBTo = $state('');
+
+	// Convert month to date range for filtering
+	function monthToDateFrom(month: string): string | null {
+		if (!month) return null;
+		return `${month}-01`;
+	}
+
+	function monthToDateTo(month: string): string | null {
+		if (!month) return null;
+		const [y, m] = month.split('-').map(Number);
+		const lastDay = new Date(y, m, 0).getDate();
+		return `${month}-${String(lastDay).padStart(2, '0')}`;
+	}
 
 	// Shared filters
 	let selectedClients = $state<string[]>([]);
@@ -74,8 +87,8 @@
 	const periodAInvoices = $derived(
 		filterInvoicesByPeriod(
 			countryInvoices,
-			periodAFrom || null,
-			periodATo || null,
+			monthToDateFrom(periodAFrom),
+			monthToDateTo(periodATo),
 			selectedClients.length > 0 ? selectedClients : undefined,
 			selectedAgencyNames.length > 0 ? selectedAgencyNames : undefined,
 			selectedChannels.length > 0 ? selectedChannels : undefined
@@ -85,8 +98,8 @@
 	const periodBInvoices = $derived(
 		filterInvoicesByPeriod(
 			countryInvoices,
-			periodBFrom || null,
-			periodBTo || null,
+			monthToDateFrom(periodBFrom),
+			monthToDateTo(periodBTo),
 			selectedClients.length > 0 ? selectedClients : undefined,
 			selectedAgencyNames.length > 0 ? selectedAgencyNames : undefined,
 			selectedChannels.length > 0 ? selectedChannels : undefined
@@ -162,25 +175,24 @@
 		if (preset === 'month-yoy') {
 			const prevMonth = m === 1 ? 12 : m - 1;
 			const prevMonthYear = m === 1 ? y - 1 : y;
-			const lastDay = new Date(prevMonthYear, prevMonth, 0).getDate();
-			periodAFrom = `${prevMonthYear}-${String(prevMonth).padStart(2, '0')}-01`;
-			periodATo = `${prevMonthYear}-${String(prevMonth).padStart(2, '0')}-${lastDay}`;
-			periodBFrom = `${prevMonthYear - 1}-${String(prevMonth).padStart(2, '0')}-01`;
-			periodBTo = `${prevMonthYear - 1}-${String(prevMonth).padStart(2, '0')}-${lastDay}`;
+			const mm = String(prevMonth).padStart(2, '0');
+			periodAFrom = `${prevMonthYear}-${mm}`;
+			periodATo = `${prevMonthYear}-${mm}`;
+			periodBFrom = `${prevMonthYear - 1}-${mm}`;
+			periodBTo = `${prevMonthYear - 1}-${mm}`;
 		} else if (preset === 'quarter-yoy') {
 			const q = Math.floor((m - 1) / 3);
 			const qStart = q * 3 + 1;
 			const qEnd = qStart + 2;
-			const lastDay = new Date(y, qEnd, 0).getDate();
-			periodAFrom = `${y}-${String(qStart).padStart(2, '0')}-01`;
-			periodATo = `${y}-${String(qEnd).padStart(2, '0')}-${lastDay}`;
-			periodBFrom = `${y - 1}-${String(qStart).padStart(2, '0')}-01`;
-			periodBTo = `${y - 1}-${String(qEnd).padStart(2, '0')}-${lastDay}`;
+			periodAFrom = `${y}-${String(qStart).padStart(2, '0')}`;
+			periodATo = `${y}-${String(qEnd).padStart(2, '0')}`;
+			periodBFrom = `${y - 1}-${String(qStart).padStart(2, '0')}`;
+			periodBTo = `${y - 1}-${String(qEnd).padStart(2, '0')}`;
 		} else {
-			periodAFrom = `${y}-01-01`;
-			periodATo = `${y}-12-31`;
-			periodBFrom = `${y - 1}-01-01`;
-			periodBTo = `${y - 1}-12-31`;
+			periodAFrom = `${y}-01`;
+			periodATo = `${y}-12`;
+			periodBFrom = `${y - 1}-01`;
+			periodBTo = `${y - 1}-12`;
 		}
 	}
 </script>
@@ -214,11 +226,11 @@
 				<div class="flex items-center gap-2">
 					<div class="flex items-center gap-1.5">
 						<label for="pa-from" class="text-xs text-muted-foreground">Desde</label>
-						<Input id="pa-from" type="date" bind:value={periodAFrom} class="h-8 w-[140px] text-xs" />
+						<Input id="pa-from" type="month" bind:value={periodAFrom} class="h-8 w-[140px] text-xs" />
 					</div>
 					<div class="flex items-center gap-1.5">
 						<label for="pa-to" class="text-xs text-muted-foreground">Hasta</label>
-						<Input id="pa-to" type="date" bind:value={periodATo} class="h-8 w-[140px] text-xs" />
+						<Input id="pa-to" type="month" bind:value={periodATo} class="h-8 w-[140px] text-xs" />
 					</div>
 				</div>
 			</Card.CardContent>
@@ -236,11 +248,11 @@
 				<div class="flex items-center gap-2">
 					<div class="flex items-center gap-1.5">
 						<label for="pb-from" class="text-xs text-muted-foreground">Desde</label>
-						<Input id="pb-from" type="date" bind:value={periodBFrom} class="h-8 w-[140px] text-xs" />
+						<Input id="pb-from" type="month" bind:value={periodBFrom} class="h-8 w-[140px] text-xs" />
 					</div>
 					<div class="flex items-center gap-1.5">
 						<label for="pb-to" class="text-xs text-muted-foreground">Hasta</label>
-						<Input id="pb-to" type="date" bind:value={periodBTo} class="h-8 w-[140px] text-xs" />
+						<Input id="pb-to" type="month" bind:value={periodBTo} class="h-8 w-[140px] text-xs" />
 					</div>
 				</div>
 			</Card.CardContent>
