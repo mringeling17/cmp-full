@@ -1,21 +1,33 @@
 <script lang="ts">
 	import * as Popover from '$lib/components/ui/popover/index.js';
-	import { ChevronDown, Check } from '@lucide/svelte';
+	import { ChevronDown, Check, Search } from '@lucide/svelte';
 
 	let {
 		label,
 		items,
-		selected = $bindable([])
+		selected = $bindable([]),
+		searchable = false
 	}: {
 		label: string;
 		items: { id: string; name: string }[];
 		selected: string[];
+		searchable?: boolean;
 	} = $props();
 
 	let open = $state(false);
+	let searchQuery = $state('');
+	let searchInput: HTMLInputElement | undefined = $state();
 
 	const displayText = $derived(
 		selected.length === 0 ? label : `${label} (${selected.length})`
+	);
+
+	const filteredItems = $derived(
+		searchable && searchQuery.trim()
+			? items.filter((item) =>
+					item.name.toLowerCase().includes(searchQuery.toLowerCase())
+				)
+			: items
 	);
 
 	function toggle(id: string) {
@@ -29,6 +41,16 @@
 	function clearAll() {
 		selected = [];
 	}
+
+	$effect(() => {
+		if (open && searchable) {
+			// Focus search input when popover opens
+			setTimeout(() => searchInput?.focus(), 50);
+		}
+		if (!open) {
+			searchQuery = '';
+		}
+	});
 </script>
 
 <Popover.Popover bind:open>
@@ -41,6 +63,17 @@
 		{/snippet}
 	</Popover.PopoverTrigger>
 	<Popover.PopoverContent class="w-[220px] p-0" align="start">
+		{#if searchable}
+			<div class="flex items-center gap-2 border-b px-2 py-1.5">
+				<Search class="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+				<input
+					bind:this={searchInput}
+					bind:value={searchQuery}
+					placeholder="Buscar..."
+					class="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+				/>
+			</div>
+		{/if}
 		<div class="max-h-[300px] overflow-y-auto p-1">
 			{#if selected.length > 0}
 				<button
@@ -50,7 +83,7 @@
 					Limpiar seleccion
 				</button>
 			{/if}
-			{#each items as item (item.id)}
+			{#each filteredItems as item (item.id)}
 				{@const isSelected = selected.includes(item.id)}
 				<button
 					class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
@@ -68,7 +101,7 @@
 					<span class="truncate">{item.name}</span>
 				</button>
 			{/each}
-			{#if items.length === 0}
+			{#if filteredItems.length === 0}
 				<p class="px-2 py-4 text-sm text-muted-foreground text-center">Sin opciones</p>
 			{/if}
 		</div>

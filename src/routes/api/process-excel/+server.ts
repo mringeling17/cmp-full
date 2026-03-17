@@ -122,12 +122,14 @@ export const POST: RequestHandler = async ({ request }) => {
 					created_at: new Date().toISOString()
 				};
 
-				// Check if exists by (invoice_number, country) unique key
+				// Check if exists by (invoice_number, exhibition_month, country, document_type)
 				const { data: existing } = await supabase
 					.from('invoices')
 					.select('id')
 					.eq('invoice_number', row.invoiceNumber)
+					.eq('exhibition_month', `${year}-${String(month).padStart(2, '0')}`)
 					.eq('country', country)
+					.eq('document_type', row.documentType ?? '')
 					.maybeSingle();
 
 				if (existing) {

@@ -10,12 +10,16 @@
 		FileText,
 		Users,
 		TrendingUp,
-		Calculator,
+		Radio,
 		BarChart3
 	} from '@lucide/svelte';
 	import type { EChartsOption } from 'echarts';
+	import * as Tabs from '$lib/components/ui/tabs/index.js';
+	import PeriodComparison from '$lib/components/dashboard/PeriodComparison.svelte';
 
 	let { data } = $props();
+
+	let activeTab = $state('resumen');
 
 	// -----------------------------------------------------------
 	// Reactive country / filter values (from stores)
@@ -107,29 +111,61 @@
 		new Set(filteredInvoices().filter((inv) => inv.client_id).map((inv) => inv.client_id)).size
 	);
 
-	const avgPerInvoice = $derived(invoiceCount > 0 ? totalNet / invoiceCount : 0);
+	const totalSpotCount = $derived(
+		filteredInvoices().reduce((sum, inv) => sum + (inv.spot_count ?? 0), 0)
+	);
 
-	// Monthly growth: compare current month vs previous month
+	// YoY growth: compare filtered period vs same period previous year
 	const monthlyGrowth = $derived(() => {
 		const invs = filteredInvoices();
 		if (invs.length === 0) return null;
 
-		// Group by month
-		const byMonth = new Map<string, number>();
-		for (const inv of invs) {
-			if (!inv.invoice_date) continue;
-			const key = inv.invoice_date.substring(0, 7); // YYYY-MM
-			byMonth.set(key, (byMonth.get(key) ?? 0) + (inv.net_value ?? 0));
+		const allCountryInvoices = (data.invoices ?? []).filter((inv) => inv.country === country);
+
+		let dateFrom: string | null = currentFilters.dateFrom;
+		let dateTo: string | null = currentFilters.dateTo;
+
+		// If no date filter, use the range from filtered data
+		if (!dateFrom || !dateTo) {
+			const dates = invs.filter((inv) => inv.invoice_date).map((inv) => inv.invoice_date!).sort();
+			if (dates.length === 0) return null;
+			if (!dateFrom) dateFrom = dates[0];
+			if (!dateTo) dateTo = dates[dates.length - 1];
 		}
 
-		const months = Array.from(byMonth.keys()).sort();
-		if (months.length < 2) return null;
+		const currentTotal = invs.reduce((sum, inv) => sum + (inv.net_value ?? 0), 0);
 
-		const currentMonth = byMonth.get(months[months.length - 1]) ?? 0;
-		const prevMonth = byMonth.get(months[months.length - 2]) ?? 0;
-		if (prevMonth === 0) return null;
+		// Calculate previous year range
+		const prevFrom = dateFrom.replace(/^\d{4}/, (y) => String(parseInt(y) - 1));
+		const prevTo = dateTo.replace(/^\d{4}/, (y) => String(parseInt(y) - 1));
 
-		return ((currentMonth - prevMonth) / prevMonth) * 100;
+		// Filter invoices from previous year (same country, same date range)
+		let prevInvs = allCountryInvoices.filter(
+			(inv) => inv.invoice_date && inv.invoice_date >= prevFrom && inv.invoice_date <= prevTo
+		);
+
+		// Apply same client/agency/channel filters
+		if (currentFilters.clientIds.length > 0) {
+			prevInvs = prevInvs.filter(
+				(inv) => inv.client_id && currentFilters.clientIds.includes(inv.client_id)
+			);
+		}
+		if (currentFilters.agencyIds.length > 0) {
+			const agencyNames = (data.agencies ?? [])
+				.filter((a) => currentFilters.agencyIds.includes(a.id))
+				.map((a) => a.name);
+			prevInvs = prevInvs.filter((inv) => inv.agency && agencyNames.includes(inv.agency));
+		}
+		if (currentFilters.channels.length > 0) {
+			prevInvs = prevInvs.filter(
+				(inv) => inv.channel && currentFilters.channels.includes(inv.channel)
+			);
+		}
+
+		const prevTotal = prevInvs.reduce((sum, inv) => sum + (inv.net_value ?? 0), 0);
+		if (prevTotal === 0) return null;
+
+		return ((currentTotal - prevTotal) / prevTotal) * 100;
 	});
 
 	// -----------------------------------------------------------
@@ -159,7 +195,11 @@
 		return {
 			tooltip: {
 				trigger: 'axis',
-				axisPointer: { type: 'shadow' }
+				axisPointer: { type: 'shadow' },
+				formatter: (params: any) => {
+					const p = Array.isArray(params) ? params[0] : params;
+					return `${p.name}: ${formatCurrency(p.value, country)}`;
+				}
 			},
 			grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
 			xAxis: { type: 'value' },
@@ -193,7 +233,13 @@
 			.map(([name, value]) => ({ name, value: Math.round(value) }));
 
 		return {
-			tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+			tooltip: {
+				trigger: 'item',
+				formatter: (params: any) => {
+					const val = formatCurrency(params.value, country);
+					return `${params.name}: ${val} (${params.percent?.toFixed(1)}%)`;
+				}
+			},
 			legend: {
 				type: 'scroll',
 				bottom: 0,
@@ -230,7 +276,14 @@
 			.slice(0, 10);
 
 		return {
-			tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+			tooltip: {
+				trigger: 'axis',
+				axisPointer: { type: 'shadow' },
+				formatter: (params: any) => {
+					const p = Array.isArray(params) ? params[0] : params;
+					return `${p.name}: ${formatCurrency(p.value, country)}`;
+				}
+			},
 			grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
 			xAxis: {
 				type: 'category',
@@ -274,7 +327,17 @@
 		});
 
 		return {
-			tooltip: { trigger: 'axis' },
+			tooltip: {
+				trigger: 'axis',
+				formatter: (params: any) => {
+					const items = Array.isArray(params) ? params : [params];
+					let result = items[0]?.axisValueLabel || '';
+					for (const p of items) {
+						result += `<br/>${p.marker} ${p.seriesName}: ${formatCurrency(p.value, country)}`;
+					}
+					return result;
+				}
+			},
 			legend: { data: ['Bruto', 'Neto'], bottom: 0 },
 			grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
 			xAxis: {
@@ -322,7 +385,14 @@
 		const values = quarters.map((q) => Math.round(quarterData.get(q)!));
 
 		return {
-			tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+			tooltip: {
+				trigger: 'axis',
+				axisPointer: { type: 'shadow' },
+				formatter: (params: any) => {
+					const p = Array.isArray(params) ? params[0] : params;
+					return `${p.name}: ${formatCurrency(p.value, country)}`;
+				}
+			},
 			grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
 			xAxis: {
 				type: 'category',
@@ -365,6 +435,15 @@
 		</div>
 	</div>
 
+	<!-- Tabs -->
+	<Tabs.Root bind:value={activeTab}>
+		<Tabs.List>
+			<Tabs.Trigger value="resumen">Resumen</Tabs.Trigger>
+			<Tabs.Trigger value="comparacion">Comparación</Tabs.Trigger>
+		</Tabs.List>
+
+		<Tabs.Content value="resumen" class="space-y-6 pt-4">
+
 	<!-- Filters -->
 	<DashboardFilters
 		clients={countryClients}
@@ -395,12 +474,12 @@
 			icon={Users}
 		/>
 		<KpiCard
-			title="Promedio/Factura"
-			value={formatCurrency(avgPerInvoice, country)}
-			icon={Calculator}
+			title="Spots"
+			value={formatNumber(totalSpotCount, 0)}
+			icon={Radio}
 		/>
 		<KpiCard
-			title="Crecimiento Mensual"
+			title="Crecimiento YoY"
 			value={monthlyGrowth() != null ? `${monthlyGrowth()! >= 0 ? '+' : ''}${monthlyGrowth()!.toFixed(1)}%` : 'N/A'}
 			trend={monthlyGrowth()}
 			icon={BarChart3}
@@ -411,7 +490,7 @@
 	<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
 		<!-- Top 10 Clients -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm">
-			<h3 class="mb-4 text-sm font-semibold">Top 10 Clientes por Ingresos</h3>
+			<h3 class="mb-4 text-sm font-semibold">Top 10 Clientes - Venta Neta</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={topClientsOptions()} height="350px" />
 			{:else}
@@ -423,7 +502,7 @@
 
 		<!-- Channel Distribution -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm">
-			<h3 class="mb-4 text-sm font-semibold">Distribucion por Canal</h3>
+			<h3 class="mb-4 text-sm font-semibold">Distribución por Canal - Venta Neta</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={channelPieOptions()} height="350px" />
 			{:else}
@@ -435,7 +514,7 @@
 
 		<!-- Agency Distribution -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm">
-			<h3 class="mb-4 text-sm font-semibold">Distribucion por Agencia</h3>
+			<h3 class="mb-4 text-sm font-semibold">Distribución por Agencia - Venta Neta</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={agencyBarOptions()} height="350px" />
 			{:else}
@@ -447,7 +526,7 @@
 
 		<!-- Monthly Trend -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm">
-			<h3 class="mb-4 text-sm font-semibold">Tendencia Mensual</h3>
+			<h3 class="mb-4 text-sm font-semibold">Tendencia Mensual - Venta Neta</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={monthlyTrendOptions()} height="350px" />
 			{:else}
@@ -459,7 +538,7 @@
 
 		<!-- Quarterly Sales -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm lg:col-span-2">
-			<h3 class="mb-4 text-sm font-semibold">Ventas Trimestrales</h3>
+			<h3 class="mb-4 text-sm font-semibold">Ventas Trimestrales - Venta Neta</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={quarterlySalesOptions()} height="300px" />
 			{:else}
@@ -469,4 +548,15 @@
 			{/if}
 		</div>
 	</div>
+
+		</Tabs.Content>
+
+		<Tabs.Content value="comparacion" class="pt-4">
+			<PeriodComparison
+				invoices={data.invoices ?? []}
+				clients={data.clients ?? []}
+				agencies={data.agencies ?? []}
+			/>
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

@@ -33,7 +33,7 @@
 		<div class="text-2xl font-bold">{value}</div>
 		{#if trend != null}
 			<p class="text-xs {trendColor} mt-1">
-				{trendIcon}{trend.toFixed(1)}% vs mes anterior
+				{trendIcon}{trend.toFixed(1)}% vs mismo periodo año anterior
 			</p>
 		{/if}
 	</Card.CardContent>

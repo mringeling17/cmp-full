@@ -61,8 +61,8 @@
 		<Input id="date-to" type="date" bind:value={dateTo} class="h-9 w-[140px] text-xs" />
 	</div>
 
-	<MultiSelect label="Clientes" items={clients} bind:selected={selectedClients} />
-	<MultiSelect label="Agencias" items={agencies} bind:selected={selectedAgencies} />
+	<MultiSelect label="Clientes" items={clients} bind:selected={selectedClients} searchable={true} />
+	<MultiSelect label="Agencias" items={agencies} bind:selected={selectedAgencies} searchable={true} />
 	<MultiSelect label="Canales" items={channels} bind:selected={selectedChannels} />
 
 	{#if hasActiveFilters}
