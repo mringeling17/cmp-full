@@ -356,12 +356,14 @@
 
 	const gridOptions = $derived.by((): GridOptions => ({
 		columnDefs,
-		rowData: gridRowData,
 		pinnedBottomRowData,
 		defaultColDef: { resizable: true, suppressMovable: true, sortable: true },
 		animateRows: false,
 		suppressCellFocus: true
 	}));
+
+	// Key to force AG Grid re-creation when columns change
+	const gridKey = $derived(`${rowGroup}-${columnBreakdown}-${metric}-${country}-${filterYear}`);
 
 	// ── Excel export ──
 	function handleExport() {
@@ -642,13 +644,16 @@
 				</CardTitle>
 			</CardHeader>
 			<CardContent>
+				{#key gridKey}
 				<div class={gridClass} style="height: {gridHeight}px; width: 100%;">
 					<AgGridSvelte
 						{gridOptions}
 						{gridClass}
+						rowData={gridRowData}
 						modules={[ClientSideRowModelModule] as any}
 					/>
 				</div>
+			{/key}
 			</CardContent>
 		</Card>
 	{:else}
