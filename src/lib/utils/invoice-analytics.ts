@@ -54,12 +54,16 @@ export function filterInvoicesByPeriod(
 	return list;
 }
 
-export function groupByClient(invoices: Invoice[], clientsMap: ClientsMap): GroupedItem[] {
+export function groupByClient(
+	invoices: Invoice[],
+	clientsMap: ClientsMap,
+	valueField: 'net_value' | 'gross_value' = 'net_value'
+): GroupedItem[] {
 	const revenue = new Map<string, number>();
 
 	for (const inv of invoices) {
 		const name = (inv.client_id && clientsMap.get(inv.client_id)) || 'Sin cliente';
-		revenue.set(name, (revenue.get(name) ?? 0) + (inv.net_value ?? 0));
+		revenue.set(name, (revenue.get(name) ?? 0) + ((inv[valueField] as number) ?? 0));
 	}
 
 	return Array.from(revenue.entries())
@@ -67,12 +71,15 @@ export function groupByClient(invoices: Invoice[], clientsMap: ClientsMap): Grou
 		.sort((a, b) => b.value - a.value);
 }
 
-export function groupByAgency(invoices: Invoice[]): GroupedItem[] {
+export function groupByAgency(
+	invoices: Invoice[],
+	valueField: 'net_value' | 'gross_value' = 'net_value'
+): GroupedItem[] {
 	const revenue = new Map<string, number>();
 
 	for (const inv of invoices) {
 		const name = inv.agency || 'Directo';
-		revenue.set(name, (revenue.get(name) ?? 0) + (inv.net_value ?? 0));
+		revenue.set(name, (revenue.get(name) ?? 0) + ((inv[valueField] as number) ?? 0));
 	}
 
 	return Array.from(revenue.entries())
@@ -80,12 +87,15 @@ export function groupByAgency(invoices: Invoice[]): GroupedItem[] {
 		.sort((a, b) => b.value - a.value);
 }
 
-export function groupByChannel(invoices: Invoice[]): GroupedItem[] {
+export function groupByChannel(
+	invoices: Invoice[],
+	valueField: 'net_value' | 'gross_value' = 'net_value'
+): GroupedItem[] {
 	const revenue = new Map<string, number>();
 
 	for (const inv of invoices) {
 		const name = inv.channel || 'Sin canal';
-		revenue.set(name, (revenue.get(name) ?? 0) + (inv.net_value ?? 0));
+		revenue.set(name, (revenue.get(name) ?? 0) + ((inv[valueField] as number) ?? 0));
 	}
 
 	return Array.from(revenue.entries())

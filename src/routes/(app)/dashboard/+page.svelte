@@ -1,21 +1,26 @@
 <script lang="ts">
 	import { selectedCountry, countryConfig } from '$lib/stores/country';
 	import { filters } from '$lib/stores/filters';
+	import { valueMode, valueField, valueLabel } from '$lib/stores/value-mode';
 	import { formatCurrency, formatNumber } from '$lib/utils/currency';
 	import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
 	import DashboardChart from '$lib/components/dashboard/DashboardChart.svelte';
 	import DashboardFilters from '$lib/components/dashboard/DashboardFilters.svelte';
+	import ValueModeToggle from '$lib/components/dashboard/ValueModeToggle.svelte';
 	import {
 		DollarSign,
 		FileText,
 		Users,
 		TrendingUp,
 		Radio,
-		BarChart3
+		BarChart3,
+		Download
 	} from '@lucide/svelte';
 	import type { EChartsOption } from 'echarts';
 	import * as Tabs from '$lib/components/ui/tabs/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
 	import PeriodComparison from '$lib/components/dashboard/PeriodComparison.svelte';
+	import { exportDashboardToExcel } from '$lib/utils/excel-export';
 
 	let { data } = $props();
 
@@ -35,6 +40,14 @@
 
 	selectedCountry.subscribe((v) => (country = v));
 	filters.subscribe((v) => (currentFilters = v));
+
+	let currentValueMode = $state<'net' | 'gross'>('net');
+	let currentValueField = $state<'net_value' | 'gross_value'>('net_value');
+	let currentValueLabel = $state('Neta');
+
+	valueMode.subscribe((v) => (currentValueMode = v));
+	valueField.subscribe((v) => (currentValueField = v as 'net_value' | 'gross_value'));
+	valueLabel.subscribe((v) => (currentValueLabel = v));
 
 	// -----------------------------------------------------------
 	// Derive lists for filter dropdowns (scoped to country)
@@ -133,7 +146,7 @@
 			if (!dateTo) dateTo = dates[dates.length - 1];
 		}
 
-		const currentTotal = invs.reduce((sum, inv) => sum + (inv.net_value ?? 0), 0);
+		const currentTotal = invs.reduce((sum, inv) => sum + ((inv as Record<string, any>)[currentValueField] ?? 0), 0);
 
 		// Calculate previous year range
 		const prevFrom = dateFrom.replace(/^\d{4}/, (y) => String(parseInt(y) - 1));
@@ -162,7 +175,7 @@
 			);
 		}
 
-		const prevTotal = prevInvs.reduce((sum, inv) => sum + (inv.net_value ?? 0), 0);
+		const prevTotal = prevInvs.reduce((sum, inv) => sum + ((inv as Record<string, any>)[currentValueField] ?? 0), 0);
 		if (prevTotal === 0) return null;
 
 		return ((currentTotal - prevTotal) / prevTotal) * 100;
@@ -184,7 +197,7 @@
 				(inv as Record<string, unknown>).clients !== null
 					? ((inv as Record<string, unknown>).clients as { name: string }).name
 					: 'Sin cliente';
-			clientRevenue.set(clientName, (clientRevenue.get(clientName) ?? 0) + (inv.net_value ?? 0));
+			clientRevenue.set(clientName, (clientRevenue.get(clientName) ?? 0) + ((inv as Record<string, any>)[currentValueField] ?? 0));
 		}
 
 		const sorted = Array.from(clientRevenue.entries())
@@ -225,7 +238,7 @@
 
 		for (const inv of invs) {
 			const ch = inv.channel || 'Sin canal';
-			channelRevenue.set(ch, (channelRevenue.get(ch) ?? 0) + (inv.net_value ?? 0));
+			channelRevenue.set(ch, (channelRevenue.get(ch) ?? 0) + ((inv as Record<string, any>)[currentValueField] ?? 0));
 		}
 
 		const pieData = Array.from(channelRevenue.entries())
@@ -268,7 +281,7 @@
 
 		for (const inv of invs) {
 			const ag = inv.agency || 'Directo';
-			agencyRevenue.set(ag, (agencyRevenue.get(ag) ?? 0) + (inv.net_value ?? 0));
+			agencyRevenue.set(ag, (agencyRevenue.get(ag) ?? 0) + ((inv as Record<string, any>)[currentValueField] ?? 0));
 		}
 
 		const sorted = Array.from(agencyRevenue.entries())
@@ -304,20 +317,17 @@
 	// Monthly trend (line chart)
 	const monthlyTrendOptions = $derived((): EChartsOption => {
 		const invs = filteredInvoices();
-		const monthlyData = new Map<string, { gross: number; net: number }>();
+		const monthlyData = new Map<string, number>();
 
 		for (const inv of invs) {
 			if (!inv.invoice_date) continue;
 			const key = inv.invoice_date.substring(0, 7);
-			const existing = monthlyData.get(key) ?? { gross: 0, net: 0 };
-			existing.gross += inv.gross_value ?? 0;
-			existing.net += inv.net_value ?? 0;
-			monthlyData.set(key, existing);
+			const existing = monthlyData.get(key) ?? 0;
+			monthlyData.set(key, existing + ((inv as Record<string, any>)[currentValueField] ?? 0));
 		}
 
 		const months = Array.from(monthlyData.keys()).sort();
-		const grossValues = months.map((m) => Math.round(monthlyData.get(m)!.gross));
-		const netValues = months.map((m) => Math.round(monthlyData.get(m)!.net));
+		const values = months.map((m) => Math.round(monthlyData.get(m)!));
 
 		// Format months for display
 		const monthLabels = months.map((m) => {
@@ -325,6 +335,11 @@
 			const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 			return `${monthNames[parseInt(mo) - 1]} ${y.substring(2)}`;
 		});
+
+		const isNet = currentValueMode === 'net';
+		const seriesColor = isNet ? '#10b981' : '#6366f1';
+		const areaColor = isNet ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)';
+		const seriesName = isNet ? 'Neto' : 'Bruto';
 
 		return {
 			tooltip: {
@@ -338,8 +353,7 @@
 					return result;
 				}
 			},
-			legend: { data: ['Bruto', 'Neto'], bottom: 0 },
-			grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+			grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
 			xAxis: {
 				type: 'category',
 				data: monthLabels,
@@ -348,20 +362,12 @@
 			yAxis: { type: 'value' },
 			series: [
 				{
-					name: 'Bruto',
+					name: seriesName,
 					type: 'line',
-					data: grossValues,
+					data: values,
 					smooth: true,
-					itemStyle: { color: '#6366f1' },
-					areaStyle: { color: 'rgba(99, 102, 241, 0.1)' }
-				},
-				{
-					name: 'Neto',
-					type: 'line',
-					data: netValues,
-					smooth: true,
-					itemStyle: { color: '#10b981' },
-					areaStyle: { color: 'rgba(16, 185, 129, 0.1)' }
+					itemStyle: { color: seriesColor },
+					areaStyle: { color: areaColor }
 				}
 			]
 		};
@@ -378,7 +384,7 @@
 			const year = date.getFullYear();
 			const quarter = Math.floor(date.getMonth() / 3) + 1;
 			const key = `${year} Q${quarter}`;
-			quarterData.set(key, (quarterData.get(key) ?? 0) + (inv.net_value ?? 0));
+			quarterData.set(key, (quarterData.get(key) ?? 0) + ((inv as Record<string, any>)[currentValueField] ?? 0));
 		}
 
 		const quarters = Array.from(quarterData.keys()).sort();
@@ -422,6 +428,98 @@
 			]
 		};
 	});
+
+	function handleDashboardExport() {
+		const invs = filteredInvoices();
+		const field = currentValueField;
+
+		// Top clients
+		const clientRevenue = new Map<string, number>();
+		for (const inv of invs) {
+			const clientName =
+				inv.clients && typeof inv.clients === 'object' && inv.clients !== null
+					? (inv.clients as { name: string }).name
+					: 'Sin cliente';
+			clientRevenue.set(clientName, (clientRevenue.get(clientName) ?? 0) + ((inv as any)[field] ?? 0));
+		}
+		const topClients = Array.from(clientRevenue.entries())
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 10)
+			.map(([name, value]) => ({ name, value: Math.round(value) }));
+
+		// Channel distribution
+		const channelRevenue = new Map<string, number>();
+		for (const inv of invs) {
+			const ch = inv.channel || 'Sin canal';
+			channelRevenue.set(ch, (channelRevenue.get(ch) ?? 0) + ((inv as any)[field] ?? 0));
+		}
+		const totalForPercent = Array.from(channelRevenue.values()).reduce((a, b) => a + b, 0);
+		const channelDistribution = Array.from(channelRevenue.entries())
+			.sort((a, b) => b[1] - a[1])
+			.map(([name, value]) => ({
+				name,
+				value: Math.round(value),
+				percent: totalForPercent > 0 ? Math.round((value / totalForPercent) * 1000) / 10 : 0
+			}));
+
+		// Agency distribution
+		const agencyRevenue = new Map<string, number>();
+		for (const inv of invs) {
+			const ag = inv.agency || 'Directo';
+			agencyRevenue.set(ag, (agencyRevenue.get(ag) ?? 0) + ((inv as any)[field] ?? 0));
+		}
+		const agencyDistribution = Array.from(agencyRevenue.entries())
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 10)
+			.map(([name, value]) => ({ name, value: Math.round(value) }));
+
+		// Monthly trend
+		const monthlyDataExport = new Map<string, number>();
+		for (const inv of invs) {
+			if (!inv.invoice_date) continue;
+			const key = inv.invoice_date.substring(0, 7);
+			monthlyDataExport.set(key, (monthlyDataExport.get(key) ?? 0) + ((inv as any)[field] ?? 0));
+		}
+		const monthlyTrend = Array.from(monthlyDataExport.entries())
+			.sort((a, b) => a[0].localeCompare(b[0]))
+			.map(([month, value]) => ({ month, value: Math.round(value) }));
+
+		// Quarterly
+		const quarterDataExport = new Map<string, number>();
+		for (const inv of invs) {
+			if (!inv.invoice_date) continue;
+			const date = new Date(inv.invoice_date);
+			const year = date.getFullYear();
+			const quarter = Math.floor(date.getMonth() / 3) + 1;
+			const key = `${year} Q${quarter}`;
+			quarterDataExport.set(key, (quarterDataExport.get(key) ?? 0) + ((inv as any)[field] ?? 0));
+		}
+		const quarterly = Array.from(quarterDataExport.entries())
+			.sort((a, b) => a[0].localeCompare(b[0]))
+			.map(([quarter, value]) => ({ quarter, value: Math.round(value) }));
+
+		const dateFrom = currentFilters.dateFrom ?? '';
+		const dateTo = currentFilters.dateTo ?? '';
+		exportDashboardToExcel(
+			{
+				kpis: [
+					{ label: 'Total Bruto', value: formatCurrency(totalGross, country) },
+					{ label: 'Total Neto', value: formatCurrency(totalNet, country) },
+					{ label: 'Facturas', value: String(invoiceCount) },
+					{ label: 'Clientes Activos', value: String(activeClients) },
+					{ label: 'Spots', value: String(totalSpotCount) },
+					{ label: 'Crecimiento YoY', value: monthlyGrowth() != null ? `${monthlyGrowth()!.toFixed(1)}%` : 'N/A' }
+				],
+				topClients,
+				channelDistribution,
+				agencyDistribution,
+				monthlyTrend,
+				quarterly
+			},
+			country,
+			`Dashboard_${country.toUpperCase()}_${dateFrom}_${dateTo}.xlsx`
+		);
+	}
 </script>
 
 <div class="space-y-6">
@@ -433,6 +531,7 @@
 				Resumen financiero - {$countryConfig.name}
 			</p>
 		</div>
+		<ValueModeToggle />
 	</div>
 
 	<!-- Tabs -->
@@ -445,11 +544,17 @@
 		<Tabs.Content value="resumen" class="space-y-6 pt-4">
 
 	<!-- Filters -->
-	<DashboardFilters
-		clients={countryClients}
-		agencies={countryAgencies}
-		channels={channelList()}
-	/>
+	<div class="flex flex-wrap items-center justify-between gap-4">
+		<DashboardFilters
+			clients={countryClients}
+			agencies={countryAgencies}
+			channels={channelList()}
+		/>
+		<Button variant="outline" size="sm" class="h-8 gap-2" onclick={handleDashboardExport}>
+			<Download class="h-4 w-4" />
+			Exportar Excel
+		</Button>
+	</div>
 
 	<!-- KPI Cards -->
 	<div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
@@ -457,11 +562,13 @@
 			title="Total Bruto"
 			value={formatCurrency(totalGross, country)}
 			icon={DollarSign}
+			class={currentValueMode === 'net' ? 'opacity-50' : ''}
 		/>
 		<KpiCard
 			title="Total Neto"
 			value={formatCurrency(totalNet, country)}
 			icon={TrendingUp}
+			class={currentValueMode === 'gross' ? 'opacity-50' : ''}
 		/>
 		<KpiCard
 			title="Facturas"
@@ -490,7 +597,7 @@
 	<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
 		<!-- Top 10 Clients -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm">
-			<h3 class="mb-4 text-sm font-semibold">Top 10 Clientes - Venta Neta</h3>
+			<h3 class="mb-4 text-sm font-semibold">Top 10 Clientes - Venta {currentValueLabel}</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={topClientsOptions()} height="350px" />
 			{:else}
@@ -502,7 +609,7 @@
 
 		<!-- Channel Distribution -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm">
-			<h3 class="mb-4 text-sm font-semibold">Distribución por Canal - Venta Neta</h3>
+			<h3 class="mb-4 text-sm font-semibold">Distribución por Canal - Venta {currentValueLabel}</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={channelPieOptions()} height="350px" />
 			{:else}
@@ -514,7 +621,7 @@
 
 		<!-- Agency Distribution -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm">
-			<h3 class="mb-4 text-sm font-semibold">Distribución por Agencia - Venta Neta</h3>
+			<h3 class="mb-4 text-sm font-semibold">Distribución por Agencia - Venta {currentValueLabel}</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={agencyBarOptions()} height="350px" />
 			{:else}
@@ -526,7 +633,7 @@
 
 		<!-- Monthly Trend -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm">
-			<h3 class="mb-4 text-sm font-semibold">Tendencia Mensual - Venta Neta</h3>
+			<h3 class="mb-4 text-sm font-semibold">Tendencia Mensual - Venta {currentValueLabel}</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={monthlyTrendOptions()} height="350px" />
 			{:else}
@@ -538,7 +645,7 @@
 
 		<!-- Quarterly Sales -->
 		<div class="rounded-xl border bg-card p-4 shadow-sm lg:col-span-2">
-			<h3 class="mb-4 text-sm font-semibold">Ventas Trimestrales - Venta Neta</h3>
+			<h3 class="mb-4 text-sm font-semibold">Ventas Trimestrales - Venta {currentValueLabel}</h3>
 			{#if filteredInvoices().length > 0}
 				<DashboardChart options={quarterlySalesOptions()} height="300px" />
 			{:else}

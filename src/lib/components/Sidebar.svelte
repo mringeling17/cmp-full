@@ -13,6 +13,7 @@
 	import TrendingUpIcon from '@lucide/svelte/icons/trending-up';
 	import UsersIcon from '@lucide/svelte/icons/users';
 	import FolderIcon from '@lucide/svelte/icons/folder';
+	import TableIcon from '@lucide/svelte/icons/table';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import PanelLeftCloseIcon from '@lucide/svelte/icons/panel-left-close';
 	import PanelLeftOpenIcon from '@lucide/svelte/icons/panel-left-open';
@@ -36,6 +37,7 @@
 		{ href: '/cobranzas', label: 'Cobranzas', icon: TrendingUpIcon },
 		{ href: '/clientes', label: 'Clientes', icon: UsersIcon },
 		{ href: '/archivos', label: 'Archivos', icon: FolderIcon },
+		{ href: '/reportes', label: 'Reportes', icon: TableIcon },
 		{ href: '/admin', label: 'Admin', icon: SettingsIcon, adminOnly: true }
 	];
 

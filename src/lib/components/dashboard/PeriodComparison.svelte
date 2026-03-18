@@ -15,7 +15,10 @@
 	} from '$lib/utils/invoice-analytics';
 	import type { EChartsOption } from 'echarts';
 	import { selectedCountry } from '$lib/stores/country';
-	import { ArrowUpDown, Calendar } from '@lucide/svelte';
+	import { valueField, valueLabel } from '$lib/stores/value-mode';
+	import { ArrowUpDown, Calendar, Download } from '@lucide/svelte';
+	import AggregateComparisonChart from './AggregateComparisonChart.svelte';
+	import { exportComparisonToExcel } from '$lib/utils/excel-export';
 
 	let {
 		invoices,
@@ -29,6 +32,12 @@
 
 	let country = $state('ar');
 	selectedCountry.subscribe((v) => (country = v));
+
+	let currentValueField = $state<'net_value' | 'gross_value'>('net_value');
+	let currentValueLabel = $state('Neta');
+
+	valueField.subscribe((v) => (currentValueField = v));
+	valueLabel.subscribe((v) => (currentValueLabel = v));
 
 	// Period A state (month format: YYYY-MM)
 	let periodAFrom = $state('');
@@ -107,16 +116,16 @@
 	);
 
 	// KPIs
-	const totalA = $derived(periodAInvoices.reduce((sum: number, inv: any) => sum + (inv.net_value ?? 0), 0));
-	const totalB = $derived(periodBInvoices.reduce((sum: number, inv: any) => sum + (inv.net_value ?? 0), 0));
+	const totalA = $derived(periodAInvoices.reduce((sum: number, inv: any) => sum + (inv[currentValueField] ?? 0), 0));
+	const totalB = $derived(periodBInvoices.reduce((sum: number, inv: any) => sum + (inv[currentValueField] ?? 0), 0));
 	const totalDiff = $derived(totalA - totalB);
 	const totalDiffPct = $derived(totalB !== 0 ? ((totalA - totalB) / totalB) * 100 : null);
 
 	// Group data by dimension
 	function getGrouped(invs: any[]): GroupedItem[] {
-		if (dimension === 'client') return groupByClient(invs, clientsMap);
-		if (dimension === 'agency') return groupByAgency(invs);
-		return groupByChannel(invs);
+		if (dimension === 'client') return groupByClient(invs, clientsMap, currentValueField);
+		if (dimension === 'agency') return groupByAgency(invs, currentValueField);
+		return groupByChannel(invs, currentValueField);
 	}
 
 	const groupedA = $derived(getGrouped(periodAInvoices));
@@ -166,6 +175,22 @@
 		};
 	});
 
+	function handleComparisonExport() {
+		const dimensionLabel = dimension === 'client' ? 'Cliente' : dimension === 'agency' ? 'Agencia' : 'Canal';
+		exportComparisonToExcel(
+			{
+				totalA,
+				totalB,
+				diff: totalDiff,
+				diffPct: totalDiffPct,
+				dimensionLabel,
+				rows: deltaData
+			},
+			country,
+			`Comparacion_${periodAFrom}_${periodATo}_vs_${periodBFrom}_${periodBTo}_${country.toUpperCase()}.xlsx`
+		);
+	}
+
 	// Presets
 	function applyPreset(preset: 'month-yoy' | 'quarter-yoy' | 'year-yoy') {
 		const now = new Date();
@@ -199,17 +224,25 @@
 
 <div class="space-y-6">
 	<!-- Presets -->
-	<div class="flex flex-wrap items-center gap-2">
-		<span class="text-xs text-muted-foreground font-medium">Presets:</span>
-		<Button variant="outline" size="sm" class="h-8 text-xs" onclick={() => applyPreset('month-yoy')}>
-			Mes vs Año Anterior
-		</Button>
-		<Button variant="outline" size="sm" class="h-8 text-xs" onclick={() => applyPreset('quarter-yoy')}>
-			Trimestre vs Año Anterior
-		</Button>
-		<Button variant="outline" size="sm" class="h-8 text-xs" onclick={() => applyPreset('year-yoy')}>
-			Año vs Año
-		</Button>
+	<div class="flex flex-wrap items-center justify-between gap-2">
+		<div class="flex flex-wrap items-center gap-2">
+			<span class="text-xs text-muted-foreground font-medium">Presets:</span>
+			<Button variant="outline" size="sm" class="h-8 text-xs" onclick={() => applyPreset('month-yoy')}>
+				Mes vs Año Anterior
+			</Button>
+			<Button variant="outline" size="sm" class="h-8 text-xs" onclick={() => applyPreset('quarter-yoy')}>
+				Trimestre vs Año Anterior
+			</Button>
+			<Button variant="outline" size="sm" class="h-8 text-xs" onclick={() => applyPreset('year-yoy')}>
+				Año vs Año
+			</Button>
+		</div>
+		{#if deltaData.length > 0}
+			<Button variant="outline" size="sm" class="h-8 gap-2" onclick={handleComparisonExport}>
+				<Download class="h-4 w-4" />
+				Exportar Excel
+			</Button>
+		{/if}
 	</div>
 
 	<!-- Period selectors -->
@@ -270,7 +303,7 @@
 	<div class="grid grid-cols-2 gap-4 md:grid-cols-4">
 		<Card.Card>
 			<Card.CardHeader class="pb-2">
-				<Card.CardTitle class="text-xs font-medium text-muted-foreground">Total Periodo A</Card.CardTitle>
+				<Card.CardTitle class="text-xs font-medium text-muted-foreground">Total Periodo A (Venta {currentValueLabel})</Card.CardTitle>
 			</Card.CardHeader>
 			<Card.CardContent>
 				<div class="text-xl font-bold text-indigo-600 dark:text-indigo-400">{formatCurrency(totalA, country)}</div>
@@ -280,7 +313,7 @@
 
 		<Card.Card>
 			<Card.CardHeader class="pb-2">
-				<Card.CardTitle class="text-xs font-medium text-muted-foreground">Total Periodo B</Card.CardTitle>
+				<Card.CardTitle class="text-xs font-medium text-muted-foreground">Total Periodo B (Venta {currentValueLabel})</Card.CardTitle>
 			</Card.CardHeader>
 			<Card.CardContent>
 				<div class="text-xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalB, country)}</div>
@@ -310,6 +343,8 @@
 			</Card.CardContent>
 		</Card.Card>
 	</div>
+
+	<AggregateComparisonChart {totalA} {totalB} {country} />
 
 	<!-- Dimension selector + Chart -->
 	<div class="rounded-xl border bg-card p-4 shadow-sm">
@@ -386,6 +421,19 @@
 							</tr>
 						{/each}
 					</tbody>
+					<tfoot>
+						<tr class="font-bold bg-muted/50 border-t-2">
+							<td class="px-4 py-2.5">Total general</td>
+							<td class="px-4 py-2.5 text-right">{formatCurrency(totalA, country)}</td>
+							<td class="px-4 py-2.5 text-right">{formatCurrency(totalB, country)}</td>
+							<td class="px-4 py-2.5 text-right {totalDiff >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
+								{totalDiff >= 0 ? '+' : ''}{formatCurrency(totalDiff, country)}
+							</td>
+							<td class="px-4 py-2.5 text-right {totalDiffPct != null && totalDiffPct >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
+								{totalDiffPct != null ? `${totalDiffPct >= 0 ? '+' : ''}${totalDiffPct.toFixed(1)}%` : 'N/A'}
+							</td>
+						</tr>
+					</tfoot>
 				</table>
 			</div>
 		</div>

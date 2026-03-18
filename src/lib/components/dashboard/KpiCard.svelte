@@ -6,12 +6,14 @@
 		title,
 		value,
 		trend = undefined,
-		icon: Icon = undefined
+		icon: Icon = undefined,
+		class: className = ''
 	}: {
 		title: string;
 		value: string;
 		trend?: number | null;
 		icon?: Component | undefined;
+		class?: string;
 	} = $props();
 
 	const trendColor = $derived(
@@ -20,7 +22,7 @@
 	const trendIcon = $derived(trend != null ? (trend >= 0 ? '+' : '') : '');
 </script>
 
-<Card.Card class="relative overflow-hidden">
+<Card.Card class="relative overflow-hidden {className}">
 	<Card.CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
 		<Card.CardTitle class="text-sm font-medium text-muted-foreground">{title}</Card.CardTitle>
 		{#if Icon}
