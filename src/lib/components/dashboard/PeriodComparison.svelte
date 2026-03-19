@@ -175,6 +175,82 @@
 		};
 	});
 
+	// Monthly trend chart comparing both periods
+	const monthlyTrendComparisonOptions = $derived((): EChartsOption => {
+		const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+		// Group Period A invoices by month
+		const monthlyA = new Map<number, number>();
+		for (const inv of periodAInvoices) {
+			if (!inv.invoice_date) continue;
+			const m = new Date(inv.invoice_date).getMonth();
+			monthlyA.set(m, (monthlyA.get(m) ?? 0) + ((inv as any)[currentValueField] ?? 0));
+		}
+
+		// Group Period B invoices by month
+		const monthlyB = new Map<number, number>();
+		for (const inv of periodBInvoices) {
+			if (!inv.invoice_date) continue;
+			const m = new Date(inv.invoice_date).getMonth();
+			monthlyB.set(m, (monthlyB.get(m) ?? 0) + ((inv as any)[currentValueField] ?? 0));
+		}
+
+		// Determine which months have data
+		const allMonths = new Set([...monthlyA.keys(), ...monthlyB.keys()]);
+		const sortedMonths = Array.from(allMonths).sort((a, b) => a - b);
+		const labels = sortedMonths.map((m) => monthNames[m]);
+		const valuesA = sortedMonths.map((m) => Math.round(monthlyA.get(m) ?? 0));
+		const valuesB = sortedMonths.map((m) => Math.round(monthlyB.get(m) ?? 0));
+
+		// Build period labels for legend
+		const labelA = periodAFrom && periodATo
+			? (periodAFrom === periodATo ? periodAFrom : `${periodAFrom} - ${periodATo}`)
+			: 'Periodo A';
+		const labelB = periodBFrom && periodBTo
+			? (periodBFrom === periodBTo ? periodBFrom : `${periodBFrom} - ${periodBTo}`)
+			: 'Periodo B';
+
+		return {
+			tooltip: {
+				trigger: 'axis',
+				formatter: (params: any) => {
+					const items = Array.isArray(params) ? params : [params];
+					let result = items[0]?.axisValueLabel || '';
+					for (const p of items) {
+						result += `<br/>${p.marker} ${p.seriesName}: ${formatCurrency(p.value, country)}`;
+					}
+					return result;
+				}
+			},
+			legend: { data: [labelA, labelB], bottom: 0 },
+			grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+			xAxis: {
+				type: 'category',
+				data: labels,
+				axisLabel: { fontSize: 10 }
+			},
+			yAxis: { type: 'value' },
+			series: [
+				{
+					name: labelA,
+					type: 'line',
+					data: valuesA,
+					smooth: true,
+					itemStyle: { color: '#6366f1' },
+					areaStyle: { color: 'rgba(99, 102, 241, 0.08)' }
+				},
+				{
+					name: labelB,
+					type: 'line',
+					data: valuesB,
+					smooth: true,
+					itemStyle: { color: '#f59e0b' },
+					areaStyle: { color: 'rgba(245, 158, 11, 0.08)' }
+				}
+			]
+		};
+	});
+
 	function handleComparisonExport() {
 		const dimensionLabel = dimension === 'client' ? 'Cliente' : dimension === 'agency' ? 'Agencia' : 'Canal';
 		exportComparisonToExcel(
@@ -345,6 +421,14 @@
 	</div>
 
 	<AggregateComparisonChart {totalA} {totalB} {country} />
+
+	<!-- Monthly trend comparison -->
+	{#if periodAInvoices.length > 0 || periodBInvoices.length > 0}
+		<div class="rounded-xl border bg-card p-4 shadow-sm">
+			<h3 class="text-sm font-semibold mb-2">Tendencia Mensual - Venta {currentValueLabel}</h3>
+			<DashboardChart options={monthlyTrendComparisonOptions()} height="350px" />
+		</div>
+	{/if}
 
 	<!-- Dimension selector + Chart -->
 	<div class="rounded-xl border bg-card p-4 shadow-sm">
