@@ -70,6 +70,12 @@
 				/>
 			</div>
 
+			<div class="flex justify-end">
+				<a href="/forgot-password" class="text-sm text-muted-foreground hover:underline">
+					Olvide mi contraseña
+				</a>
+			</div>
+
 			{#if error}
 				<p class="text-sm text-destructive">{error}</p>
 			{/if}

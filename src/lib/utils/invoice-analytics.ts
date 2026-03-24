@@ -113,8 +113,8 @@ export function computeDelta(periodA: GroupedItem[], periodB: GroupedItem[]): De
 		.map((name) => {
 			const valueA = mapA.get(name) ?? 0;
 			const valueB = mapB.get(name) ?? 0;
-			const delta = valueA - valueB;
-			const deltaPct = valueB !== 0 ? ((valueA - valueB) / valueB) * 100 : null;
+			const delta = valueB - valueA;
+			const deltaPct = valueA !== 0 ? ((valueB - valueA) / valueA) * 100 : null;
 			return { name, valueA, valueB, delta, deltaPct };
 		})
 		.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));

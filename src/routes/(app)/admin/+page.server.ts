@@ -30,6 +30,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 		throw error(500, `Error al listar usuarios: ${listError.message}`);
 	}
 
+	// Fetch user profiles for country access
+	const { data: profiles } = await adminClient
+		.from('user_profiles')
+		.select('id, allowed_countries');
+
+	const profileMap = new Map(
+		(profiles ?? []).map((p) => [p.id, p.allowed_countries])
+	);
+
 	// Serialize users for the client
 	const serializedUsers = (users ?? []).map((u) => ({
 		id: u.id,
@@ -37,7 +46,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		created_at: u.created_at,
 		last_sign_in_at: u.last_sign_in_at ?? null,
 		role: (u.app_metadata?.role as string) ?? 'user',
-		email_confirmed_at: u.email_confirmed_at ?? null
+		email_confirmed_at: u.email_confirmed_at ?? null,
+		allowed_countries: profileMap.get(u.id) ?? null
 	}));
 
 	return {
@@ -56,6 +66,7 @@ export const actions: Actions = {
 		const username = (formData.get('username') as string)?.trim();
 		const password = (formData.get('password') as string)?.trim();
 		const role = (formData.get('role') as string)?.trim() || 'user';
+		const countries = formData.getAll('countries') as string[];
 
 		if (!username || !password) {
 			return { success: false, error: 'Usuario y contrasena son requeridos', action: 'create' };
@@ -71,9 +82,17 @@ export const actions: Actions = {
 			};
 		}
 
+		if (countries.length === 0) {
+			return {
+				success: false,
+				error: 'Debes seleccionar al menos un pais',
+				action: 'create'
+			};
+		}
+
 		const adminClient = getAdminClient();
 
-		const { error: createError } = await adminClient.auth.admin.createUser({
+		const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
 			email,
 			password,
 			email_confirm: true,
@@ -84,10 +103,19 @@ export const actions: Actions = {
 			return { success: false, error: createError.message, action: 'create' };
 		}
 
+		// Create user profile with country access
+		// null = all countries (when all 3 are selected)
+		const allowedCountries = countries.length === 3 ? null : countries;
+
+		await adminClient.from('user_profiles').insert({
+			id: createData.user.id,
+			allowed_countries: allowedCountries
+		});
+
 		return { success: true, action: 'create' };
 	},
 
-	updateRole: async ({ request, locals }) => {
+	update: async ({ request, locals }) => {
 		if (!locals.user || !isUserAdmin(locals.user)) {
 			throw error(403, 'Acceso denegado');
 		}
@@ -95,22 +123,37 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const userId = formData.get('userId') as string;
 		const role = formData.get('role') as string;
+		const countries = formData.getAll('countries') as string[];
 
 		if (!userId || !role) {
-			return { success: false, error: 'Datos incompletos', action: 'updateRole' };
+			return { success: false, error: 'Datos incompletos', action: 'update' };
+		}
+
+		if (countries.length === 0) {
+			return { success: false, error: 'Debes seleccionar al menos un pais', action: 'update' };
 		}
 
 		const adminClient = getAdminClient();
 
+		// Update role
 		const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
 			app_metadata: { role }
 		});
 
 		if (updateError) {
-			return { success: false, error: updateError.message, action: 'updateRole' };
+			return { success: false, error: updateError.message, action: 'update' };
 		}
 
-		return { success: true, action: 'updateRole' };
+		// Update country access
+		const allowedCountries = countries.length === 3 ? null : countries;
+
+		await adminClient.from('user_profiles').upsert({
+			id: userId,
+			allowed_countries: allowedCountries,
+			updated_at: new Date().toISOString()
+		});
+
+		return { success: true, action: 'update' };
 	},
 
 	delete: async ({ request, locals }) => {

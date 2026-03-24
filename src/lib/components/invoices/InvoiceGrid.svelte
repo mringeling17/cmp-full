@@ -56,6 +56,7 @@
 		{
 			headerName: 'Cliente',
 			width: 200,
+			sortable: false,
 			valueGetter: (p) => p.data?.clients?.name ?? '-'
 		},
 		{ field: 'agency', headerName: 'Agencia', width: 180 },

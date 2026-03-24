@@ -82,6 +82,30 @@ export async function sendCertificationEmail(
 	});
 }
 
+export async function sendPasswordResetEmail(toEmail: string, resetUrl: string) {
+	const transporter = createTransporter();
+	await transporter.sendMail({
+		from: SMTP_EMAIL,
+		to: toEmail,
+		subject: 'Restablecer contraseña - CMP Finance',
+		html: `
+			<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+				<h2 style="color: #333;">Restablecer contraseña</h2>
+				<p>Recibimos una solicitud para restablecer tu contraseña en CMP Finance.</p>
+				<p>
+					<a href="${resetUrl}"
+						style="display: inline-block; padding: 10px 24px; background: #18181b; color: #fff; text-decoration: none; border-radius: 6px;">
+						Restablecer contraseña
+					</a>
+				</p>
+				<p style="color: #666; font-size: 14px;">Este enlace expira en 1 hora. Si no solicitaste esto, ignora este mensaje.</p>
+				<hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+				<p style="color: #999; font-size: 12px;">CMP Finance</p>
+			</div>
+		`
+	});
+}
+
 export async function sendMissingEmailNotification(
 	transporter: nodemailer.Transporter,
 	clientName: string,

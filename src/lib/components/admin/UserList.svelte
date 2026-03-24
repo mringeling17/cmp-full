@@ -2,9 +2,9 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
-	import * as Select from '$lib/components/ui/select/index.js';
 	import { Search, Plus, Pencil, Trash2, Shield, ShieldCheck, Loader2 } from '@lucide/svelte';
 	import { enhance } from '$app/forms';
+	import { COUNTRIES } from '$lib/stores/country';
 
 	export interface AdminUser {
 		id: string;
@@ -13,6 +13,7 @@
 		last_sign_in_at: string | null;
 		role: string;
 		email_confirmed_at: string | null;
+		allowed_countries: string[] | null;
 	}
 
 	let {
@@ -65,6 +66,10 @@
 				return role;
 		}
 	}
+
+	function getCountryFlag(code: string): string {
+		return COUNTRIES[code as keyof typeof COUNTRIES]?.flag ?? code;
+	}
 </script>
 
 <div class="flex h-full flex-col">
@@ -108,6 +113,15 @@
 							<div class="text-muted-foreground mt-0.5 flex gap-3 text-xs">
 								<span>Creado: {formatDate(user.created_at)}</span>
 								<span>Ultimo acceso: {formatDate(user.last_sign_in_at)}</span>
+								<span class="flex items-center gap-1">
+									{#if user.allowed_countries}
+										{#each user.allowed_countries as code}
+											<span title={COUNTRIES[code as keyof typeof COUNTRIES]?.name ?? code}>{getCountryFlag(code)}</span>
+										{/each}
+									{:else}
+										<span title="Todos los paises">🌎</span>
+									{/if}
+								</span>
 							</div>
 						</div>
 
@@ -116,7 +130,7 @@
 								size="sm"
 								variant="ghost"
 								class="size-8 p-0"
-								title="Editar rol"
+								title="Editar usuario"
 								onclick={() => onEditClick(user)}
 							>
 								<Pencil class="size-3.5" />

@@ -3,6 +3,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
 	import MultiSelect from '$lib/components/dashboard/MultiSelect.svelte';
+	import MonthPicker from '$lib/components/dashboard/MonthPicker.svelte';
 	import { RotateCcw, Search } from '@lucide/svelte';
 
 	export interface InvoiceFilterValues {
@@ -37,6 +38,18 @@
 
 	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
 
+	function monthToDateFrom(month: string): string {
+		if (!month) return '';
+		return `${month}-01`;
+	}
+
+	function monthToDateTo(month: string): string {
+		if (!month) return '';
+		const [y, m] = month.split('-').map(Number);
+		const lastDay = new Date(y, m, 0).getDate();
+		return `${month}-${String(lastDay).padStart(2, '0')}`;
+	}
+
 	function emitFilterChange() {
 		onFilterChange({
 			search,
@@ -44,8 +57,8 @@
 			agencyIds: selectedAgencies,
 			channels: selectedChannels,
 			paymentStatus,
-			dateFrom,
-			dateTo
+			dateFrom: monthToDateFrom(dateFrom),
+			dateTo: monthToDateTo(dateTo)
 		});
 	}
 
@@ -117,14 +130,14 @@
 
 	<!-- Date From -->
 	<div class="flex items-center gap-1.5">
-		<label for="inv-date-from" class="text-xs text-muted-foreground whitespace-nowrap">Desde</label>
-		<Input id="inv-date-from" type="date" bind:value={dateFrom} class="h-9 w-[140px] text-xs" />
+		<label class="text-xs text-muted-foreground whitespace-nowrap">Desde</label>
+		<MonthPicker bind:value={dateFrom} />
 	</div>
 
 	<!-- Date To -->
 	<div class="flex items-center gap-1.5">
-		<label for="inv-date-to" class="text-xs text-muted-foreground whitespace-nowrap">Hasta</label>
-		<Input id="inv-date-to" type="date" bind:value={dateTo} class="h-9 w-[140px] text-xs" />
+		<label class="text-xs text-muted-foreground whitespace-nowrap">Hasta</label>
+		<MonthPicker bind:value={dateTo} />
 	</div>
 
 	<!-- Multi-selects -->

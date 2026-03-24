@@ -460,7 +460,55 @@ export type Database = {
 					}
 				];
 			};
-			payments: {
+			password_reset_tokens: {
+			Row: {
+				id: string;
+				user_id: string;
+				token: string;
+				expires_at: string;
+				used: boolean;
+				created_at: string;
+			};
+			Insert: {
+				id?: string;
+				user_id: string;
+				token: string;
+				expires_at: string;
+				used?: boolean;
+				created_at?: string;
+			};
+			Update: {
+				id?: string;
+				user_id?: string;
+				token?: string;
+				expires_at?: string;
+				used?: boolean;
+				created_at?: string;
+			};
+			Relationships: [];
+		};
+		user_profiles: {
+			Row: {
+				id: string;
+				allowed_countries: string[] | null;
+				created_at: string;
+				updated_at: string;
+			};
+			Insert: {
+				id: string;
+				allowed_countries?: string[] | null;
+				created_at?: string;
+				updated_at?: string;
+			};
+			Update: {
+				id?: string;
+				allowed_countries?: string[] | null;
+				created_at?: string;
+				updated_at?: string;
+			};
+			Relationships: [];
+		};
+		payments: {
 				Row: {
 					id: string;
 					amount: number;

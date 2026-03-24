@@ -118,8 +118,8 @@
 	// KPIs
 	const totalA = $derived(periodAInvoices.reduce((sum: number, inv: any) => sum + (inv[currentValueField] ?? 0), 0));
 	const totalB = $derived(periodBInvoices.reduce((sum: number, inv: any) => sum + (inv[currentValueField] ?? 0), 0));
-	const totalDiff = $derived(totalA - totalB);
-	const totalDiffPct = $derived(totalB !== 0 ? ((totalA - totalB) / totalB) * 100 : null);
+	const totalDiff = $derived(totalB - totalA);
+	const totalDiffPct = $derived(totalA !== 0 ? ((totalB - totalA) / totalA) * 100 : null);
 
 	// Group data by dimension
 	function getGrouped(invs: any[]): GroupedItem[] {
@@ -199,8 +199,8 @@
 		const allMonths = new Set([...monthlyA.keys(), ...monthlyB.keys()]);
 		const sortedMonths = Array.from(allMonths).sort((a, b) => a - b);
 		const labels = sortedMonths.map((m) => monthNames[m]);
-		const valuesA = sortedMonths.map((m) => Math.round(monthlyA.get(m) ?? 0));
-		const valuesB = sortedMonths.map((m) => Math.round(monthlyB.get(m) ?? 0));
+		const valuesA = sortedMonths.map((m) => monthlyA.has(m) ? Math.round(monthlyA.get(m)!) : null);
+		const valuesB = sortedMonths.map((m) => monthlyB.has(m) ? Math.round(monthlyB.get(m)!) : null);
 
 		// Build period labels for legend
 		const labelA = periodAFrom && periodATo
@@ -246,6 +246,73 @@
 					smooth: true,
 					itemStyle: { color: '#f59e0b' },
 					areaStyle: { color: 'rgba(245, 158, 11, 0.08)' }
+				}
+			]
+		};
+	});
+
+	// Agency comparison chart (always visible, dedicated)
+	const agencyComparisonOptions = $derived((): EChartsOption => {
+		const agenciesA = groupByAgency(periodAInvoices, currentValueField);
+		const agenciesB = groupByAgency(periodBInvoices, currentValueField);
+
+		const allAgencyNames = new Set([...agenciesA.map(a => a.name), ...agenciesB.map(a => a.name)]);
+		const mapA = new Map(agenciesA.map(a => [a.name, a.value]));
+		const mapB = new Map(agenciesB.map(a => [a.name, a.value]));
+
+		// Sort by total (A + B) descending, take top 15
+		const sorted = Array.from(allAgencyNames)
+			.map(name => ({
+				name,
+				valueA: mapA.get(name) ?? 0,
+				valueB: mapB.get(name) ?? 0,
+				total: (mapA.get(name) ?? 0) + (mapB.get(name) ?? 0)
+			}))
+			.sort((a, b) => b.total - a.total)
+			.slice(0, 15);
+
+		const names = sorted.map(d => d.name.length > 20 ? d.name.substring(0, 20) + '...' : d.name);
+
+		const labelA = periodAFrom && periodATo
+			? (periodAFrom === periodATo ? periodAFrom : `${periodAFrom} - ${periodATo}`)
+			: 'Periodo A';
+		const labelB = periodBFrom && periodBTo
+			? (periodBFrom === periodBTo ? periodBFrom : `${periodBFrom} - ${periodBTo}`)
+			: 'Periodo B';
+
+		return {
+			tooltip: {
+				trigger: 'axis',
+				axisPointer: { type: 'shadow' },
+				formatter: (params: any) => {
+					const items = Array.isArray(params) ? params : [params];
+					let result = items[0]?.axisValueLabel || '';
+					for (const p of items) {
+						result += `<br/>${p.marker} ${p.seriesName}: ${formatCurrency(p.value, country)}`;
+					}
+					return result;
+				}
+			},
+			legend: { data: [labelA, labelB], bottom: 0 },
+			grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+			xAxis: {
+				type: 'category',
+				data: names,
+				axisLabel: { rotate: 30, fontSize: 10 }
+			},
+			yAxis: { type: 'value' },
+			series: [
+				{
+					name: labelA,
+					type: 'bar',
+					data: sorted.map(d => Math.round(d.valueA)),
+					itemStyle: { color: '#6366f1', borderRadius: [4, 4, 0, 0] }
+				},
+				{
+					name: labelB,
+					type: 'bar',
+					data: sorted.map(d => Math.round(d.valueB)),
+					itemStyle: { color: '#f59e0b', borderRadius: [4, 4, 0, 0] }
 				}
 			]
 		};
@@ -427,6 +494,14 @@
 		<div class="rounded-xl border bg-card p-4 shadow-sm">
 			<h3 class="text-sm font-semibold mb-2">Tendencia Mensual - Venta {currentValueLabel}</h3>
 			<DashboardChart options={monthlyTrendComparisonOptions()} height="350px" />
+		</div>
+	{/if}
+
+	<!-- Agency comparison chart -->
+	{#if periodAInvoices.length > 0 || periodBInvoices.length > 0}
+		<div class="rounded-xl border bg-card p-4 shadow-sm">
+			<h3 class="text-sm font-semibold mb-2">Comparación por Agencia - Venta {currentValueLabel}</h3>
+			<DashboardChart options={agencyComparisonOptions()} height="400px" />
 		</div>
 	{/if}
 

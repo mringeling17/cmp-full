@@ -8,6 +8,7 @@ declare global {
 			supabase: SupabaseClient<Database>;
 			session: Session | null;
 			user: User | null;
+			allowedCountries: string[] | null;
 		}
 		// interface PageData {}
 		// interface PageState {}
