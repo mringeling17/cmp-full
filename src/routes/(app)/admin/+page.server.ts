@@ -30,14 +30,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 		throw error(500, `Error al listar usuarios: ${listError.message}`);
 	}
 
-	// Fetch user profiles for country access
-	const { data: profiles } = await adminClient
-		.from('user_profiles')
-		.select('id, allowed_countries');
+	// Fetch country access from user_countries (used by RLS)
+	const { data: userCountries } = await adminClient
+		.from('user_countries')
+		.select('user_id, country_id');
 
-	const profileMap = new Map(
-		(profiles ?? []).map((p) => [p.id, p.allowed_countries])
-	);
+	const profileMap = new Map<string, string[]>();
+	for (const uc of userCountries ?? []) {
+		const existing = profileMap.get(uc.user_id) ?? [];
+		existing.push(uc.country_id);
+		profileMap.set(uc.user_id, existing);
+	}
 
 	// Serialize users for the client
 	const serializedUsers = (users ?? []).map((u) => ({
@@ -103,14 +106,19 @@ export const actions: Actions = {
 			return { success: false, error: createError.message, action: 'create' };
 		}
 
-		// Create user profile with country access
-		// null = all countries (when all 3 are selected)
+		// Create user profile
 		const allowedCountries = countries.length === 3 ? null : countries;
 
-		await adminClient.from('user_profiles').insert({
+		await adminClient.from('user_profiles').upsert({
 			id: createData.user.id,
-			allowed_countries: allowedCountries
+			allowed_countries: allowedCountries,
+			updated_at: new Date().toISOString()
 		});
+
+		// Sync user_countries table (used by RLS policies)
+		await adminClient
+			.from('user_countries')
+			.insert(countries.map((c) => ({ user_id: createData.user.id, country_id: c })));
 
 		return { success: true, action: 'create' };
 	},
@@ -153,6 +161,12 @@ export const actions: Actions = {
 			updated_at: new Date().toISOString()
 		});
 
+		// Sync user_countries table (used by RLS policies)
+		await adminClient.from('user_countries').delete().eq('user_id', userId);
+		await adminClient
+			.from('user_countries')
+			.insert(countries.map((c) => ({ user_id: userId, country_id: c })));
+
 		return { success: true, action: 'update' };
 	},
 
@@ -173,6 +187,10 @@ export const actions: Actions = {
 		}
 
 		const adminClient = getAdminClient();
+
+		// Clean up user_countries and user_profiles before deleting auth user
+		await adminClient.from('user_countries').delete().eq('user_id', userId);
+		await adminClient.from('user_profiles').delete().eq('id', userId);
 
 		const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 
