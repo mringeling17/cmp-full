@@ -19,6 +19,7 @@
 	import PanelLeftOpenIcon from '@lucide/svelte/icons/panel-left-open';
 	import MenuIcon from '@lucide/svelte/icons/menu';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
+	import KeyIcon from '@lucide/svelte/icons/key-round';
 	import SunIcon from '@lucide/svelte/icons/sun';
 	import MoonIcon from '@lucide/svelte/icons/moon';
 	import { toggleMode, mode } from 'mode-watcher';
@@ -28,15 +29,16 @@
 		label: string;
 		icon: typeof LayoutDashboardIcon;
 		adminOnly?: boolean;
+		userVisible?: boolean;
 	}
 
 	const navItems: NavItem[] = [
 		{ href: '/dashboard', label: 'Dashboard', icon: LayoutDashboardIcon },
-		{ href: '/facturas', label: 'Facturas', icon: FileTextIcon },
-		{ href: '/pagos', label: 'Pagos', icon: CreditCardIcon },
-		{ href: '/cobranzas', label: 'Cobranzas', icon: TrendingUpIcon },
-		{ href: '/clientes', label: 'Clientes', icon: UsersIcon },
-		{ href: '/archivos', label: 'Archivos', icon: FolderIcon },
+		{ href: '/facturas', label: 'Facturas', icon: FileTextIcon, userVisible: false },
+		{ href: '/pagos', label: 'Pagos', icon: CreditCardIcon, userVisible: false },
+		{ href: '/cobranzas', label: 'Cobranzas', icon: TrendingUpIcon, userVisible: false },
+		{ href: '/clientes', label: 'Clientes', icon: UsersIcon, userVisible: false },
+		{ href: '/archivos', label: 'Archivos', icon: FolderIcon, userVisible: false },
 		{ href: '/reportes', label: 'Reportes', icon: TableIcon },
 		{ href: '/admin', label: 'Admin', icon: SettingsIcon, adminOnly: true }
 	];
@@ -52,7 +54,11 @@
 	);
 
 	let filteredNavItems = $derived(
-		navItems.filter((item) => !item.adminOnly || isAdmin)
+		navItems.filter((item) => {
+			if (item.adminOnly) return isAdmin;
+			if (item.userVisible === false) return isAdmin;
+			return true;
+		})
 	);
 
 	function isActive(href: string): boolean {
@@ -143,10 +149,18 @@
 				<!-- User info -->
 				<div class="p-3">
 					<p class="truncate text-xs text-sidebar-foreground/60">{userEmail}</p>
+					<a
+						href="/perfil"
+						onclick={() => (mobileOpen = false)}
+						class="mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+					>
+						<KeyIcon class="size-4" />
+						<span>Cambiar contraseña</span>
+					</a>
 					<Button
 						variant="ghost"
 						size="sm"
-						class="mt-2 w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+						class="mt-1 w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
 						onclick={handleSignOut}
 					>
 						<LogOutIcon class="size-4" />
@@ -261,10 +275,17 @@
 	<div class={cn('p-3', collapsed && 'flex flex-col items-center')}>
 		{#if !collapsed}
 			<p class="truncate text-xs text-sidebar-foreground/60">{userEmail}</p>
+			<a
+				href="/perfil"
+				class="mt-2 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground transition-colors"
+			>
+				<KeyIcon class="size-4" />
+				<span>Cambiar contraseña</span>
+			</a>
 			<Button
 				variant="ghost"
 				size="sm"
-				class="mt-2 w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+				class="mt-1 w-full justify-start gap-2 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
 				onclick={handleSignOut}
 			>
 				<LogOutIcon class="size-4" />

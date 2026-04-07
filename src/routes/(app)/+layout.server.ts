@@ -1,9 +1,17 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ locals }) => {
+const ADMIN_ONLY_PATHS = ['/facturas', '/pagos', '/cobranzas', '/clientes', '/archivos', '/admin'];
+
+export const load: LayoutServerLoad = async ({ locals, url }) => {
 	if (!locals.session) {
 		throw redirect(303, '/login');
+	}
+
+	const isAdmin = locals.session.user?.app_metadata?.role === 'admin';
+
+	if (!isAdmin && ADMIN_ONLY_PATHS.some((p) => url.pathname === p || url.pathname.startsWith(p + '/'))) {
+		throw redirect(303, '/dashboard');
 	}
 
 	return {

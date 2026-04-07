@@ -1,10 +1,19 @@
 <script lang="ts">
-	import { navigating } from '$app/stores';
+	import { navigating, page } from '$app/stores';
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import { selectedCountry, type CountryCode } from '$lib/stores/country';
 	import 'ag-grid-community/styles/ag-grid.css';
 	import 'ag-grid-community/styles/ag-theme-quartz.css';
 
 	let { children } = $props();
+
+	// Enforce allowed country on every navigation
+	$effect(() => {
+		const allowed = $page.data.allowedCountries as string[] | null;
+		if (allowed && allowed.length > 0 && !allowed.includes($selectedCountry)) {
+			selectedCountry.set(allowed[0] as CountryCode);
+		}
+	});
 </script>
 
 {#if $navigating}

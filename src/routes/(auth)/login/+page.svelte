@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { signIn } from '$lib/stores/auth';
+	import { selectedCountry } from '$lib/stores/country';
+	import type { CountryCode } from '$lib/stores/country';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
@@ -18,6 +20,16 @@
 
 		try {
 			await signIn(username, password);
+
+			// Set country before navigating
+			try {
+				const res = await fetch('/api/my-countries');
+				const { allowedCountries } = await res.json();
+				if (allowedCountries && allowedCountries.length > 0) {
+					selectedCountry.set(allowedCountries[0] as CountryCode);
+				}
+			} catch {}
+
 			await goto('/dashboard');
 		} catch (err) {
 			if (err instanceof Error) {
