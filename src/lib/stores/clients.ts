@@ -8,7 +8,6 @@ export interface ClientWithEmails {
 	id: string;
 	name: string;
 	country: string | null;
-	agency_id: string | null;
 	emails: string[];
 }
 
@@ -20,7 +19,7 @@ export async function fetchClients(country: string) {
 
 	const { data: clients, error: clientsError } = await supabase
 		.from('clients')
-		.select('id, name, country, agency_id')
+		.select('id, name, country')
 		.eq('country', country)
 		.order('name');
 
@@ -71,7 +70,7 @@ export async function createClient(name: string, country: string) {
 
 export async function updateClient(
 	clientId: string,
-	fields: { name?: string; agency_id?: string | null }
+	fields: { name?: string }
 ) {
 	const { error } = await supabase.from('clients').update(fields).eq('id', clientId);
 	if (error) throw error;

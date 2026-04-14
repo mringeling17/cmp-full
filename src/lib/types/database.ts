@@ -163,6 +163,48 @@ export type Database = {
 					}
 				];
 			};
+			client_agency_periods: {
+				Row: {
+					id: string;
+					client_id: string;
+					agency_id: string;
+					start_date: string;
+					end_date: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					client_id: string;
+					agency_id: string;
+					start_date: string;
+					end_date?: string | null;
+					created_at?: string;
+				};
+				Update: {
+					id?: string;
+					client_id?: string;
+					agency_id?: string;
+					start_date?: string;
+					end_date?: string | null;
+					created_at?: string;
+				};
+				Relationships: [
+					{
+						foreignKeyName: 'client_agency_periods_client_id_fkey';
+						columns: ['client_id'];
+						isOneToOne: false;
+						referencedRelation: 'clients';
+						referencedColumns: ['id'];
+					},
+					{
+						foreignKeyName: 'client_agency_periods_agency_id_fkey';
+						columns: ['agency_id'];
+						isOneToOne: false;
+						referencedRelation: 'agencies';
+						referencedColumns: ['id'];
+					}
+				];
+			};
 			clients: {
 				Row: {
 					id: string;
@@ -172,7 +214,6 @@ export type Database = {
 					state: string | null;
 					country: string | null;
 					postal_code: string | null;
-					agency_id: string | null;
 					created_at: string | null;
 				};
 				Insert: {
@@ -183,7 +224,6 @@ export type Database = {
 					state?: string | null;
 					country?: string | null;
 					postal_code?: string | null;
-					agency_id?: string | null;
 					created_at?: string | null;
 				};
 				Update: {
@@ -194,18 +234,9 @@ export type Database = {
 					state?: string | null;
 					country?: string | null;
 					postal_code?: string | null;
-					agency_id?: string | null;
 					created_at?: string | null;
 				};
-				Relationships: [
-					{
-						foreignKeyName: 'clients_agency_id_fkey';
-						columns: ['agency_id'];
-						isOneToOne: false;
-						referencedRelation: 'agencies';
-						referencedColumns: ['id'];
-					}
-				];
+				Relationships: [];
 			};
 			countries: {
 				Row: {

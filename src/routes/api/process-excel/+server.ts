@@ -85,11 +85,18 @@ export const POST: RequestHandler = async ({ request }) => {
 				} else {
 					const { data: newClient, error } = await supabase
 						.from('clients')
-						.insert({ name: row.client, country, agency_id: agency.id })
+						.insert({ name: row.client, country })
 						.select('id')
 						.single();
 					if (error) throw error;
 					client = newClient;
+
+					// Create agency period for new client
+					await supabase.from('client_agency_periods').insert({
+						client_id: newClient.id,
+						agency_id: agency.id,
+						start_date: new Date().toISOString().split('T')[0]
+					});
 				}
 
 				// Calculate invoice_date as last day of extracted month

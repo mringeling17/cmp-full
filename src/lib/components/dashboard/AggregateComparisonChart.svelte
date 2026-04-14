@@ -14,8 +14,8 @@
 	} = $props();
 
 	const chartOptions = $derived((): EChartsOption => {
-		const diff = totalA - totalB;
-		const diffPct = totalB !== 0 ? ((diff) / totalB * 100).toFixed(1) : null;
+		const diff = totalB - totalA;
+		const diffPct = totalA !== 0 ? ((diff) / totalA * 100).toFixed(1) : null;
 		const diffLabel = diffPct != null ? `${diff >= 0 ? '+' : ''}${diffPct}%` : '';
 
 		return {

@@ -344,23 +344,23 @@
 			const prevMonth = m === 1 ? 12 : m - 1;
 			const prevMonthYear = m === 1 ? y - 1 : y;
 			const mm = String(prevMonth).padStart(2, '0');
-			periodAFrom = `${prevMonthYear}-${mm}`;
-			periodATo = `${prevMonthYear}-${mm}`;
-			periodBFrom = `${prevMonthYear - 1}-${mm}`;
-			periodBTo = `${prevMonthYear - 1}-${mm}`;
+			periodAFrom = `${prevMonthYear - 1}-${mm}`;
+			periodATo = `${prevMonthYear - 1}-${mm}`;
+			periodBFrom = `${prevMonthYear}-${mm}`;
+			periodBTo = `${prevMonthYear}-${mm}`;
 		} else if (preset === 'quarter-yoy') {
 			const q = Math.floor((m - 1) / 3);
 			const qStart = q * 3 + 1;
 			const qEnd = qStart + 2;
-			periodAFrom = `${y}-${String(qStart).padStart(2, '0')}`;
-			periodATo = `${y}-${String(qEnd).padStart(2, '0')}`;
-			periodBFrom = `${y - 1}-${String(qStart).padStart(2, '0')}`;
-			periodBTo = `${y - 1}-${String(qEnd).padStart(2, '0')}`;
+			periodAFrom = `${y - 1}-${String(qStart).padStart(2, '0')}`;
+			periodATo = `${y - 1}-${String(qEnd).padStart(2, '0')}`;
+			periodBFrom = `${y}-${String(qStart).padStart(2, '0')}`;
+			periodBTo = `${y}-${String(qEnd).padStart(2, '0')}`;
 		} else {
-			periodAFrom = `${y}-01`;
-			periodATo = `${y}-12`;
-			periodBFrom = `${y - 1}-01`;
-			periodBTo = `${y - 1}-12`;
+			periodAFrom = `${y - 1}-01`;
+			periodATo = `${y - 1}-12`;
+			periodBFrom = `${y}-01`;
+			periodBTo = `${y}-12`;
 		}
 	}
 </script>
