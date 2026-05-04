@@ -3,7 +3,11 @@ import type { RequestHandler } from './$types';
 import { createAdminClient } from '$lib/services/supabase-admin';
 import { parseInvoiceSummary, generateBillingExcel } from '$lib/services/excel';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
 	const supabase = createAdminClient();
 
 	try {
@@ -208,7 +212,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			totalRows: rows.length
 		});
 	} catch (err: unknown) {
-		const message = err instanceof Error ? err.message : String(err);
-		return json({ success: false, error: message }, { status: 500 });
+		console.error('[process-excel] Error:', err);
+		return json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
 	}
 };

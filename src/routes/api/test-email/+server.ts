@@ -4,13 +4,23 @@ import { createTransporter } from '$lib/services/email';
 import { env } from '$env/dynamic/private';
 
 const SMTP_EMAIL = env.SMTP_EMAIL ?? '';
+const ALLOWED_TEST_DOMAINS = ['crossmediaplay.com'];
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
 	try {
 		const { to } = await request.json();
 
 		if (!to || typeof to !== 'string' || !to.includes('@')) {
 			return json({ success: false, error: 'Email destinatario inválido' }, { status: 400 });
+		}
+
+		const domain = to.split('@')[1]?.toLowerCase();
+		if (!domain || !ALLOWED_TEST_DOMAINS.includes(domain)) {
+			return json({ success: false, error: 'Solo se permiten destinatarios @crossmediaplay.com' }, { status: 403 });
 		}
 
 		const transporter = createTransporter();
@@ -24,7 +34,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		return json({ success: true, message: `Correo de prueba enviado a ${to}` });
 	} catch (err: unknown) {
-		const message = err instanceof Error ? err.message : String(err);
-		return json({ success: false, error: message }, { status: 500 });
+		console.error('[test-email] Error:', err);
+		return json({ success: false, error: 'Error al enviar correo de prueba' }, { status: 500 });
 	}
 };

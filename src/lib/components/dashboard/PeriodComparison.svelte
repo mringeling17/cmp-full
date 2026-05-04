@@ -179,28 +179,31 @@
 	const monthlyTrendComparisonOptions = $derived((): EChartsOption => {
 		const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-		// Group Period A invoices by month
-		const monthlyA = new Map<number, number>();
+		// Group Period A invoices by YYYY-MM (preserves year so sort is chronological)
+		const monthlyA = new Map<string, number>();
 		for (const inv of periodAInvoices) {
 			if (!inv.invoice_date) continue;
-			const m = new Date(inv.invoice_date).getMonth();
-			monthlyA.set(m, (monthlyA.get(m) ?? 0) + ((inv as any)[currentValueField] ?? 0));
+			const key = inv.invoice_date.slice(0, 7);
+			monthlyA.set(key, (monthlyA.get(key) ?? 0) + ((inv as any)[currentValueField] ?? 0));
 		}
 
-		// Group Period B invoices by month
-		const monthlyB = new Map<number, number>();
+		// Group Period B invoices by YYYY-MM
+		const monthlyB = new Map<string, number>();
 		for (const inv of periodBInvoices) {
 			if (!inv.invoice_date) continue;
-			const m = new Date(inv.invoice_date).getMonth();
-			monthlyB.set(m, (monthlyB.get(m) ?? 0) + ((inv as any)[currentValueField] ?? 0));
+			const key = inv.invoice_date.slice(0, 7);
+			monthlyB.set(key, (monthlyB.get(key) ?? 0) + ((inv as any)[currentValueField] ?? 0));
 		}
 
-		// Determine which months have data
+		// Union of months across both periods, sorted chronologically (lex sort works for YYYY-MM)
 		const allMonths = new Set([...monthlyA.keys(), ...monthlyB.keys()]);
-		const sortedMonths = Array.from(allMonths).sort((a, b) => a - b);
-		const labels = sortedMonths.map((m) => monthNames[m]);
-		const valuesA = sortedMonths.map((m) => monthlyA.has(m) ? Math.round(monthlyA.get(m)!) : null);
-		const valuesB = sortedMonths.map((m) => monthlyB.has(m) ? Math.round(monthlyB.get(m)!) : null);
+		const sortedKeys = Array.from(allMonths).sort();
+		const labels = sortedKeys.map((k) => {
+			const [y, m] = k.split('-').map(Number);
+			return `${monthNames[m - 1]} '${String(y).slice(-2)}`;
+		});
+		const valuesA = sortedKeys.map((k) => monthlyA.has(k) ? Math.round(monthlyA.get(k)!) : null);
+		const valuesB = sortedKeys.map((k) => monthlyB.has(k) ? Math.round(monthlyB.get(k)!) : null);
 
 		// Build period labels for legend
 		const labelA = periodAFrom && periodATo

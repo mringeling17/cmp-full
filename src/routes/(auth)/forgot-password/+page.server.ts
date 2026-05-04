@@ -17,10 +17,10 @@ export const actions: Actions = {
 		try {
 			const adminClient = createAdminClient();
 
-			// Find user by email
+			// Find user by email (perPage: 1000 to handle larger user bases)
 			const {
 				data: { users }
-			} = await adminClient.auth.admin.listUsers({ perPage: 100 });
+			} = await adminClient.auth.admin.listUsers({ perPage: 1000 });
 
 			const user = users?.find((u) => u.email === email);
 

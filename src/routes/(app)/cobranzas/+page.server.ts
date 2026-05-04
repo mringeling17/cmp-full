@@ -1,11 +1,21 @@
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
+	const allowed = locals.allowedCountries;
+
+	let clientsQuery = locals.supabase.from('clients').select('id, name, country').order('name');
+	let agenciesQuery = locals.supabase.from('agencies').select('id, name, country').order('name');
+
+	if (allowed) {
+		clientsQuery = clientsQuery.in('country', allowed);
+		agenciesQuery = agenciesQuery.in('country', allowed);
+	}
+
 	const [paymentsRes, detailsRes, clientsRes, agenciesRes] = await Promise.all([
 		locals.supabase.from('payments').select('*').order('payment_date', { ascending: false }),
 		locals.supabase.from('payment_details').select('*, invoices:invoice_id(invoice_number, client_id, agency, clients(name))'),
-		locals.supabase.from('clients').select('id, name, country').order('name'),
-		locals.supabase.from('agencies').select('id, name, country').order('name')
+		clientsQuery,
+		agenciesQuery
 	]);
 
 	return {

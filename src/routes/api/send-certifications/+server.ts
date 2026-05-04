@@ -8,7 +8,11 @@ import {
 	sendMissingEmailNotification
 } from '$lib/services/email';
 
-export const POST: RequestHandler = async () => {
+export const POST: RequestHandler = async ({ locals }) => {
+	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
 	const supabase = createAdminClient();
 
 	try {
@@ -172,7 +176,7 @@ export const POST: RequestHandler = async () => {
 			message: `${enviados} certificaciones agrupadas correctamente para envío, ${sinCorreo} no se enviaron por falta de correos de cliente (${clientesSinCorreo} clientes sin correo).`
 		});
 	} catch (err: unknown) {
-		const message = err instanceof Error ? err.message : String(err);
-		return json({ success: false, error: message }, { status: 500 });
+		console.error('[send-certifications] Error:', err);
+		return json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
 	}
 };

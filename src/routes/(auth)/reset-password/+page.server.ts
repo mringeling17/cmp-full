@@ -11,8 +11,8 @@ export const actions: Actions = {
 			return { success: false, error: 'Datos incompletos' };
 		}
 
-		if (password.length < 6) {
-			return { success: false, error: 'La contraseña debe tener al menos 6 caracteres' };
+		if (password.length < 8) {
+			return { success: false, error: 'La contraseña debe tener al menos 8 caracteres' };
 		}
 
 		const adminClient = createAdminClient();
@@ -44,10 +44,10 @@ export const actions: Actions = {
 			return { success: false, error: 'Error al actualizar la contraseña. Intenta nuevamente.' };
 		}
 
-		// Mark token as used
+		// Delete token after successful use
 		await adminClient
 			.from('password_reset_tokens')
-			.update({ used: true })
+			.delete()
 			.eq('id', tokenRow.id);
 
 		return { success: true };

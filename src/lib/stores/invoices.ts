@@ -126,11 +126,20 @@ export async function fetchInvoices(params: {
 	invoicesLoading.set(false);
 }
 
+const EDITABLE_INVOICE_FIELDS = [
+	'credit_note',
+	'factura_interna'
+] as const;
+
 export async function updateInvoiceField(
 	invoiceId: string,
 	field: string,
 	value: string | null
 ) {
+	if (!EDITABLE_INVOICE_FIELDS.includes(field as (typeof EDITABLE_INVOICE_FIELDS)[number])) {
+		throw new Error(`Campo no permitido: ${field}`);
+	}
+
 	const { error } = await supabase
 		.from('invoices')
 		.update({ [field]: value })

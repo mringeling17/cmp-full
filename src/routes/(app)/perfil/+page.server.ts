@@ -20,8 +20,8 @@ export const actions: Actions = {
 			return fail(400, { error: 'Las contraseñas no coinciden' });
 		}
 
-		// Verify current password
-		const email = locals.session?.user?.email;
+		// Verify current password (use locals.user from getUser() - server-verified)
+		const email = locals.user?.email;
 		if (!email) {
 			return fail(401, { error: 'No autenticado' });
 		}

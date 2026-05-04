@@ -77,10 +77,15 @@ export const actions: Actions = {
 
 		const email = username.includes('@') ? username : `${username}@crossmediaplay.com`;
 
-		if (password.length < 6) {
+		const VALID_ROLES = ['admin', 'user'];
+		if (!VALID_ROLES.includes(role)) {
+			return { success: false, error: 'Rol inválido', action: 'create' };
+		}
+
+		if (password.length < 8) {
 			return {
 				success: false,
-				error: 'La contrasena debe tener al menos 6 caracteres',
+				error: 'La contrasena debe tener al menos 8 caracteres',
 				action: 'create'
 			};
 		}
@@ -135,6 +140,11 @@ export const actions: Actions = {
 
 		if (!userId || !role) {
 			return { success: false, error: 'Datos incompletos', action: 'update' };
+		}
+
+		const VALID_ROLES = ['admin', 'user'];
+		if (!VALID_ROLES.includes(role)) {
+			return { success: false, error: 'Rol inválido', action: 'update' };
 		}
 
 		if (countries.length === 0) {

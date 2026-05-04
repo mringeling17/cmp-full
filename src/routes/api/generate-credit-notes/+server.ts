@@ -8,7 +8,11 @@ import {
 	generateCreditNotesExcel
 } from '$lib/services/excel';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
+		return json({ error: 'Unauthorized' }, { status: 401 });
+	}
+
 	const supabase = createAdminClient();
 
 	try {
@@ -21,6 +25,18 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 		if (!xubioFile) {
 			return json({ success: false, error: 'Falta el archivo Xubio' }, { status: 400 });
+		}
+
+		const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+		if (xubioFile.size > MAX_FILE_SIZE) {
+			return json({ success: false, error: 'El archivo excede el tamaño máximo de 10MB' }, { status: 400 });
+		}
+		const allowedTypes = [
+			'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+			'application/vnd.ms-excel'
+		];
+		if (xubioFile.type && !allowedTypes.includes(xubioFile.type)) {
+			return json({ success: false, error: 'Tipo de archivo no permitido. Solo se aceptan archivos Excel.' }, { status: 400 });
 		}
 
 		// 1. Get Invoice Summary from DB and download from storage
@@ -107,7 +123,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			outputFilename
 		});
 	} catch (err: unknown) {
-		const message = err instanceof Error ? err.message : String(err);
-		return json({ success: false, error: message }, { status: 500 });
+		console.error('[generate-credit-notes] Error:', err);
+		return json({ success: false, error: 'Error interno del servidor' }, { status: 500 });
 	}
 };
