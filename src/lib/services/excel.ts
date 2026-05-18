@@ -1,52 +1,15 @@
 import * as XLSX from 'xlsx';
-
-// Month mapping - sorted by length for matching
-const MONTH_MAP: Record<string, number> = {
-	septiembre: 9,
-	september: 9,
-	diciembre: 12,
-	december: 12,
-	noviembre: 11,
-	november: 11,
-	febrero: 2,
-	february: 2,
-	octubre: 10,
-	october: 10,
-	enero: 1,
-	january: 1,
-	agosto: 8,
-	august: 8,
-	marzo: 3,
-	march: 3,
-	abril: 4,
-	april: 4,
-	mayo: 5,
-	junio: 6,
-	june: 6,
-	julio: 7,
-	july: 7,
-	jan: 1,
-	feb: 2,
-	mar: 3,
-	apr: 4,
-	may: 5,
-	jun: 6,
-	jul: 7,
-	aug: 8,
-	sep: 9,
-	oct: 10,
-	nov: 11,
-	dec: 12
-};
-
-const CURRENCY_TO_COUNTRY: Record<string, string> = {
-	ars: 'ar',
-	mxn: 'mx',
-	clp: 'cl',
-	ar: 'ar',
-	mx: 'mx',
-	cl: 'cl'
-};
+import {
+	MONTH_MAP,
+	getCountryFromCurrency,
+	getSpanishMonthName,
+	getEnglishMonthName,
+	getCurrencyDisplayName,
+	resolveBillingCountry
+} from '$lib/config/locale';
+import { XUBIO_DOC_NUMBER } from '$lib/config/constants';
+import { previousMonthPeriod } from '$lib/utils/period';
+import { calculateTax } from '$lib/utils/tax';
 
 /** Returns the month number found in the filename, or null if none. */
 export function extractMonthFromFilename(filename: string): number | null {
@@ -70,20 +33,6 @@ export function extractYearFromFilename(filename: string): number | null {
 		}
 	}
 	return null;
-}
-
-/**
- * Last-resort billing period: ALWAYS the previous month, never the current one.
- * Used only when no period could be determined from the UI, Excel header, or filename.
- */
-function previousMonthPeriod(): { month: number; year: number } {
-	const now = new Date();
-	const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-	return { month: prev.getMonth() + 1, year: prev.getFullYear() };
-}
-
-export function getCountryFromCurrency(currencyValue: string): string {
-	return CURRENCY_TO_COUNTRY[currencyValue.trim().toLowerCase()] ?? 'generico';
 }
 
 export function normalizeInvoiceNumber(raw: unknown): string | null {
@@ -169,9 +118,11 @@ export function parseInvoiceSummary(
 
 	const parseInt_ = (val: unknown): number | null => {
 		if (val === undefined || val === null || val === '') return null;
-		const str = String(val).trim();
-		if (!/^\d+$/.test(str)) return null;
-		return parseInt(str);
+		const num = Number(String(val).trim());
+		// Accept integers and Excel-style integer floats ("12.0"); reject
+		// non-numeric or genuinely fractional values.
+		if (!Number.isFinite(num) || !Number.isInteger(num)) return null;
+		return num;
 	};
 
 	const str_ = (val: unknown): string | null => {
@@ -241,6 +192,13 @@ export function parseInvoiceSummary(
 			? getCountryFromCurrency(rows[0].currency)
 			: 'generico';
 
+	if (country === 'generico' && rows.length > 0) {
+		errors.push(
+			`No se pudo determinar el país desde la moneda (primera fila: "${rows[0].currency ?? 'vacío'}"). ` +
+				`Se facturará como Argentina por defecto; revisá la columna Currency del archivo.`
+		);
+	}
+
 	// Priority: explicit override (from UI) > Excel header > filename > previous-month fallback.
 	// The fallback is ALWAYS the previous month, never the current one, to avoid
 	// silently labelling prior-period sales with the in-progress month.
@@ -256,8 +214,12 @@ export function parseInvoiceSummary(
 export function generateBillingExcel(
 	rows: ParsedInvoiceRow[],
 	month: number,
-	year: number
+	year: number,
+	country: string
 ): Uint8Array {
+	const billingCountry = resolveBillingCountry(country);
+	const moneda = getCurrencyDisplayName(country);
+
 	// Date calculations
 	const lastDayMonth = new Date(year, month, 0); // last day of month
 	const nextMonth = month === 12 ? 1 : month + 1;
@@ -270,9 +232,7 @@ export function generateBillingExcel(
 	const fechaStr = formatDateYMD(lastDayMonth);
 	const vencimientoStr = formatDateYMD(lastDayNextMonth);
 
-	const monthDate = new Date(year, month - 1, 1);
-	const monthName = monthDate.toLocaleString('en', { month: 'long' });
-	const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+	const capitalizedMonth = getEnglishMonthName(month);
 
 	const outputColumns = [
 		'NUMERODECONTROL',
@@ -300,18 +260,18 @@ export function generateBillingExcel(
 	rows.forEach((inv, idx) => {
 		const controlNum = idx + 1;
 		const precio = inv.grossValue ?? 0;
-		const iva = Math.round(precio * 0.21 * 100) / 100;
+		const iva = calculateTax(precio, billingCountry);
 
 		// Row 1: Header
 		outputRows.push({
 			NUMERODECONTROL: controlNum,
 			CLIENTE: inv.agency,
 			TIPO: 1,
-			NUMERO: 'A-00002-00000000',
+			NUMERO: XUBIO_DOC_NUMBER,
 			FECHA: fechaStr,
 			VENCIMIENTODELCOBRO: vencimientoStr,
 			COMPROBANTEASOCIADO: '',
-			MONEDA: 'Pesos Argentinos',
+			MONEDA: moneda,
 			COTIZACION: '',
 			OBSERVACIONES: `Certificacion ${inv.invoiceNumber} / ${inv.channel ?? ''} / ${inv.client} / ${inv.orderReference ?? ''}`,
 			PRODUCTOSERVICIO: '',
@@ -426,16 +386,15 @@ export function crossInvoiceSummaryWithXubio(
 	return { matches, unmatched };
 }
 
-const SPANISH_MONTHS = [
-	'', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-	'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-];
-
 export function generateCreditNotesExcel(
 	matches: CreditNoteMatch[],
 	month: number,
-	year: number
+	year: number,
+	country: string
 ): Uint8Array {
+	const billingCountry = resolveBillingCountry(country);
+	const moneda = getCurrencyDisplayName(country);
+
 	// Date calculations
 	const lastDayMonth = new Date(year, month, 0);
 	const nextMonth = month === 12 ? 1 : month + 1;
@@ -447,7 +406,7 @@ export function generateCreditNotesExcel(
 
 	const fechaStr = formatDateDMY(lastDayMonth);
 	const vencimientoStr = formatDateDMY(lastDayNextMonth);
-	const monthName = SPANISH_MONTHS[month] ?? '';
+	const monthName = getSpanishMonthName(month);
 
 	const outputColumns = [
 		'NUMERODECONTROL', 'CLIENTE', 'TIPO', 'NUMERO', 'FECHA',
@@ -461,18 +420,18 @@ export function generateCreditNotesExcel(
 	matches.forEach((m, idx) => {
 		const controlNum = idx + 1;
 		const commission = m.commission;
-		const iva = Math.round(commission * 0.21 * 100) / 100;
+		const iva = calculateTax(commission, billingCountry);
 
 		// Row 1: Header
 		outputRows.push({
 			NUMERODECONTROL: controlNum,
 			CLIENTE: m.clienteXubio,
 			TIPO: 3,
-			NUMERO: 'A-00002-00000000',
+			NUMERO: XUBIO_DOC_NUMBER,
 			FECHA: fechaStr,
 			VENCIMIENTODELCOBRO: vencimientoStr,
 			COMPROBANTEASOCIADO: m.comprobante,
-			MONEDA: 'Pesos Argentinos',
+			MONEDA: moneda,
 			COTIZACION: 1,
 			OBSERVACIONES: m.observacion,
 			PRODUCTOSERVICIO: '',

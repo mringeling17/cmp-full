@@ -7,6 +7,13 @@ import {
 	crossInvoiceSummaryWithXubio,
 	generateCreditNotesExcel
 } from '$lib/services/excel';
+import { parsePeriodPart, validatePeriodOverride } from '$lib/utils/period';
+import {
+	STORAGE_BUCKET,
+	PROCESSED_PREFIX,
+	MAX_UPLOAD_SIZE_BYTES
+} from '$lib/config/constants';
+import { getSpanishMonthName, resolveBillingCountry } from '$lib/config/locale';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
@@ -29,12 +36,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return json({ success: false, error: 'Falta el archivo Xubio' }, { status: 400 });
 		}
 
-		const parsePeriodPart = (v: FormDataEntryValue | null): { value: number | null; valid: boolean } => {
-			if (v === null || v === '') return { value: null, valid: true };
-			const n = Number(v);
-			if (!Number.isFinite(n) || !Number.isInteger(n)) return { value: null, valid: false };
-			return { value: n, valid: true };
-		};
 		const monthParsed = parsePeriodPart(monthRaw);
 		const yearParsed = parsePeriodPart(yearRaw);
 		if (!monthParsed.valid || !yearParsed.valid) {
@@ -42,15 +43,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 		const overrideMonth = monthParsed.value;
 		const overrideYear = yearParsed.value;
-		if (overrideMonth !== null && (overrideMonth < 1 || overrideMonth > 12)) {
-			return json({ success: false, error: 'Mes inválido' }, { status: 400 });
-		}
-		if (overrideYear !== null && (overrideYear < 2020 || overrideYear > 2100)) {
-			return json({ success: false, error: 'Año inválido' }, { status: 400 });
+		const periodError = validatePeriodOverride(overrideMonth, overrideYear);
+		if (periodError) {
+			return json({ success: false, error: periodError }, { status: 400 });
 		}
 
-		const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-		if (xubioFile.size > MAX_FILE_SIZE) {
+		if (xubioFile.size > MAX_UPLOAD_SIZE_BYTES) {
 			return json({ success: false, error: 'El archivo excede el tamaño máximo de 10MB' }, { status: 400 });
 		}
 		const allowedTypes = [
@@ -73,7 +71,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const { data: isBlob, error: isDlErr } = await supabase.storage
-			.from('uploads')
+			.from(STORAGE_BUCKET)
 			.download(fileRecord.storage_path);
 
 		if (isDlErr || !isBlob) {
@@ -82,7 +80,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// 2. Parse both files
 		const isBuffer = await isBlob.arrayBuffer();
-		const { rows: invoiceRows, month, year } = parseInvoiceSummary(isBuffer, fileRecord.filename, {
+		const {
+			rows: invoiceRows,
+			month,
+			year,
+			country
+		} = parseInvoiceSummary(isBuffer, fileRecord.filename, {
 			overrideMonth,
 			overrideYear
 		});
@@ -102,23 +105,34 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// 4. Generate credit notes Excel
-		const outputBuffer = generateCreditNotesExcel(matches, month, year);
+		const outputBuffer = generateCreditNotesExcel(matches, month, year, country);
 
 		// 5. Build output path and upload
-		const SPANISH_MONTHS = [
-			'', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-			'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-		];
-		const monthName = SPANISH_MONTHS[month] ?? '';
-		const outputFilename = `NotasCredito_${monthName}_${year}_AR.xlsx`;
-		const outputPath = `processed/${outputFilename}`;
+		const monthName = getSpanishMonthName(month);
+		const fileCountry = resolveBillingCountry(country).toUpperCase();
+		const outputFilename = `NotasCredito_${monthName}_${year}_${fileCountry}.xlsx`;
+		const outputPath = `${PROCESSED_PREFIX}${outputFilename}`;
 
-		// Remove existing if any, then upload
-		await supabase.storage.from('uploads').remove([outputPath]);
-		await supabase.storage.from('uploads').upload(outputPath, outputBuffer, {
-			contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			upsert: true
-		});
+		// Remove existing if any, then upload — fail loudly on storage error
+		await supabase.storage.from(STORAGE_BUCKET).remove([outputPath]);
+		const { error: uploadErr } = await supabase.storage
+			.from(STORAGE_BUCKET)
+			.upload(outputPath, outputBuffer, {
+				contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+				upsert: true
+			});
+		if (uploadErr) {
+			await supabase.from('files_log').insert({
+				path: fileRecord.filename,
+				status: 'error',
+				message: `Storage upload failed for ${outputPath}: ${uploadErr.message}`,
+				created_at: new Date().toISOString()
+			});
+			return json(
+				{ success: false, error: 'No se pudo guardar el archivo generado' },
+				{ status: 500 }
+			);
+		}
 
 		// 6. Record in files table
 		await supabase.from('files').insert({

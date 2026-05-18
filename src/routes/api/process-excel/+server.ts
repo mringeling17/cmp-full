@@ -2,6 +2,9 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createAdminClient } from '$lib/services/supabase-admin';
 import { parseInvoiceSummary, generateBillingExcel } from '$lib/services/excel';
+import { parsePeriodPart, validatePeriodOverride } from '$lib/utils/period';
+import { STORAGE_BUCKET, PROCESSED_PREFIX } from '$lib/config/constants';
+import { getEnglishMonthName, resolveBillingCountry } from '$lib/config/locale';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
@@ -16,12 +19,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		if (!fileId) return json({ success: false, error: 'No fileId provided' }, { status: 400 });
 
-		const parsePeriodPart = (v: unknown): { value: number | null; valid: boolean } => {
-			if (v === undefined || v === null || v === '') return { value: null, valid: true };
-			const n = Number(v);
-			if (!Number.isFinite(n) || !Number.isInteger(n)) return { value: null, valid: false };
-			return { value: n, valid: true };
-		};
 		const monthParsed = parsePeriodPart(body.month);
 		const yearParsed = parsePeriodPart(body.year);
 		if (!monthParsed.valid || !yearParsed.valid) {
@@ -30,11 +27,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const overrideMonth = monthParsed.value;
 		const overrideYear = yearParsed.value;
 
-		if (overrideMonth !== null && (overrideMonth < 1 || overrideMonth > 12)) {
-			return json({ success: false, error: 'Mes inválido' }, { status: 400 });
-		}
-		if (overrideYear !== null && (overrideYear < 2020 || overrideYear > 2100)) {
-			return json({ success: false, error: 'Año inválido' }, { status: 400 });
+		const periodError = validatePeriodOverride(overrideMonth, overrideYear);
+		if (periodError) {
+			return json({ success: false, error: periodError }, { status: 400 });
 		}
 
 		// Get file record from DB
@@ -48,7 +43,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Download file server-side from Supabase Storage
 		const { data: fileBlob, error: dlErr } = await supabase.storage
-			.from('uploads')
+			.from(STORAGE_BUCKET)
 			.download(fileRecord.storage_path);
 
 		if (dlErr || !fileBlob) return json({ success: false, error: 'No se pudo descargar el archivo' }, { status: 500 });
@@ -73,6 +68,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const results = { created: 0, updated: 0, skipped: 0, errors: [...parseErrors] };
+		// Count only genuine per-row failures (a thrown error in the loop below).
+		// Parse warnings and the non-fatal client_agency_periods warning go to
+		// results.errors but must NOT block the source file from being marked
+		// processed when every invoice row actually succeeded.
+		let rowFailures = 0;
 
 		for (const row of rows) {
 			try {
@@ -118,12 +118,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					client = newClient;
 
 					// Create agency period for new client
-					await supabase.from('client_agency_periods').insert({
-						client_id: newClient.id,
-						agency_id: agency.id,
-						start_date: new Date().toISOString().split('T')[0]
-					});
+					const { error: capErr } = await supabase
+						.from('client_agency_periods')
+						.insert({
+							client_id: newClient.id,
+							agency_id: agency.id,
+							start_date: new Date().toISOString().split('T')[0]
+						});
+					if (capErr) {
+						results.errors.push(
+							`Cliente ${row.client}: no se pudo crear el período cliente-agencia (${capErr.message})`
+						);
+					}
 				}
+
+				// Normalize document_type to '' (never null) so the duplicate
+				// check below matches consistently — Postgres treats NULL != ''.
+				const documentType = row.documentType ?? '';
 
 				// Calculate invoice_date as last day of extracted month
 				const lastDay = new Date(year, month, 0);
@@ -148,7 +159,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					system_source: row.systemSource,
 					spot_count: row.spotCount,
 					business_type: row.businessType,
-					document_type: row.documentType,
+					document_type: documentType,
 					company_code: row.companyCode,
 					channel_by_feed: row.channelByFeed,
 					exhibition_month: `${year}-${String(month).padStart(2, '0')}`,
@@ -162,43 +173,63 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					.eq('invoice_number', row.invoiceNumber)
 					.eq('exhibition_month', `${year}-${String(month).padStart(2, '0')}`)
 					.eq('country', country)
-					.eq('document_type', row.documentType ?? '')
+					.eq('document_type', documentType)
 					.maybeSingle();
 
 				if (existing) {
 					// eslint-disable-next-line @typescript-eslint/no-unused-vars
 					const { created_at, ...updateData } = invoiceData;
-					await supabase.from('invoices').update(updateData).eq('id', existing.id);
+					const { error: updErr } = await supabase
+						.from('invoices')
+						.update(updateData)
+						.eq('id', existing.id);
+					if (updErr) throw updErr;
 					results.updated++;
 				} else {
-					await supabase.from('invoices').insert(invoiceData);
+					const { error: insErr } = await supabase.from('invoices').insert(invoiceData);
+					if (insErr) throw insErr;
 					results.created++;
 				}
 			} catch (err: unknown) {
 				const message = err instanceof Error ? err.message : String(err);
 				results.errors.push(`Invoice ${row.invoiceNumber}: ${message}`);
+				rowFailures++;
 			}
 		}
 
 		// Generate billing output Excel
-		const outputBuffer = generateBillingExcel(rows, month, year);
-		const monthDate = new Date(year, month - 1, 1);
-		const monthName = monthDate.toLocaleString('en', { month: 'long' });
-		const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-		const outputPath = `processed/Facturacion_${capitalizedMonth}_${country.toUpperCase()}.xlsx`;
+		const outputBuffer = generateBillingExcel(rows, month, year, country);
+		const capitalizedMonth = getEnglishMonthName(month);
+		const fileCountry = resolveBillingCountry(country).toUpperCase();
+		const outputFilename = `Facturacion_${capitalizedMonth}_${fileCountry}.xlsx`;
+		const outputPath = `${PROCESSED_PREFIX}${outputFilename}`;
 
 		// Remove existing file if any
-		await supabase.storage.from('uploads').remove([outputPath]);
+		await supabase.storage.from(STORAGE_BUCKET).remove([outputPath]);
 
-		// Upload output
-		await supabase.storage.from('uploads').upload(outputPath, outputBuffer, {
-			contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			upsert: true
-		});
+		// Upload output — fail loudly if storage write fails
+		const { error: uploadErr } = await supabase.storage
+			.from(STORAGE_BUCKET)
+			.upload(outputPath, outputBuffer, {
+				contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+				upsert: true
+			});
+		if (uploadErr) {
+			await supabase.from('files_log').insert({
+				path: fileRecord.filename,
+				status: 'error',
+				message: `Storage upload failed for ${outputPath}: ${uploadErr.message}`,
+				created_at: new Date().toISOString()
+			});
+			return json(
+				{ success: false, error: 'No se pudo guardar el archivo generado' },
+				{ status: 500 }
+			);
+		}
 
 		// Record output file in files table
 		await supabase.from('files').insert({
-			filename: `Facturacion_${capitalizedMonth}_${country.toUpperCase()}.xlsx`,
+			filename: outputFilename,
 			storage_path: outputPath,
 			file_type: 'facturacion',
 			status: 'active',
@@ -207,8 +238,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			processed_at: new Date().toISOString()
 		});
 
-		// Mark source file as processed if fileId provided
-		if (fileId) {
+		// Only mark the source file processed if every invoice row succeeded —
+		// otherwise it must remain re-processable. Advisory warnings (country
+		// fallback, client_agency_periods) do not count.
+		if (fileId && rowFailures === 0) {
 			await supabase
 				.from('files')
 				.update({ processed: true, processed_at: new Date().toISOString() })

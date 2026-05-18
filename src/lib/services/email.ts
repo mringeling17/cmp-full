@@ -1,17 +1,34 @@
 import nodemailer from 'nodemailer';
 import { env } from '$env/dynamic/private';
+import { previousMonthPeriod } from '$lib/utils/period';
+import { getSpanishMonthName } from '$lib/config/locale';
 
 const SMTP_HOST = env.SMTP_HOST ?? 'mail.crossmediaplay.com';
 const SMTP_PORT = env.SMTP_PORT ?? '465';
 const SMTP_EMAIL = env.SMTP_EMAIL ?? '';
 const SMTP_PASSWORD = env.SMTP_PASSWORD ?? '';
 
-const DEFAULT_EMAILS = [
+/** Parse a comma/semicolon-separated env list into trimmed, non-empty emails. */
+function parseEmailList(raw: string | undefined, fallback: string[]): string[] {
+	if (!raw) return fallback;
+	const list = raw
+		.split(/[,;]/)
+		.map((e) => e.trim())
+		.filter(Boolean);
+	return list.length > 0 ? list : fallback;
+}
+
+// Default certification recipients and error-notification recipients are
+// configurable via env (DEFAULT_CERT_EMAILS / ERROR_NOTIFICATION_EMAILS).
+// Fallbacks preserve the previous hardcoded behaviour.
+const DEFAULT_EMAILS = parseEmailList(env.DEFAULT_CERT_EMAILS, [
 	'trafico.ar@crossmediaplay.com',
 	'alvaro.ilic@crossmediaplay.com'
-];
+]);
 
-const ERROR_EMAILS = ['matias.ringeling@crossmediaplay.com'];
+const ERROR_EMAILS = parseEmailList(env.ERROR_NOTIFICATION_EMAILS, [
+	'matias.ringeling@crossmediaplay.com'
+]);
 
 export function getDefaultEmails(): string[] {
 	return [...DEFAULT_EMAILS];
@@ -30,35 +47,11 @@ export function createTransporter() {
 }
 
 /**
- * Returns the Spanish month name (capitalized) and year for the previous month.
- * Replicates Python's: mes_anterior = datetime.today().replace(day=1) - timedelta(days=1)
- * with locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8') and strftime("%B").capitalize()
+ * Returns the capitalized Spanish month name and year for the previous month.
  */
 export function getPreviousMonthInfo(): { name: string; year: number } {
-	const SPANISH_MONTHS = [
-		'Enero',
-		'Febrero',
-		'Marzo',
-		'Abril',
-		'Mayo',
-		'Junio',
-		'Julio',
-		'Agosto',
-		'Septiembre',
-		'Octubre',
-		'Noviembre',
-		'Diciembre'
-	];
-
-	const today = new Date();
-	// Go to day 1 of current month, then subtract 1 day to get last day of previous month
-	const firstDayOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-	const lastDayOfPrevMonth = new Date(firstDayOfCurrentMonth.getTime() - 86400000);
-
-	return {
-		name: SPANISH_MONTHS[lastDayOfPrevMonth.getMonth()],
-		year: lastDayOfPrevMonth.getFullYear()
-	};
+	const { month, year } = previousMonthPeriod();
+	return { name: getSpanishMonthName(month), year };
 }
 
 export async function sendCertificationEmail(

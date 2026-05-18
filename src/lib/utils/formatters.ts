@@ -16,16 +16,6 @@ export function truncate(text: string, maxLength: number): string {
 	return text.slice(0, maxLength) + '...';
 }
 
-/** Currency to country code mapping (for Excel processing) */
-export const CURRENCY_TO_COUNTRY: Record<string, string> = {
-	ars: 'ar',
-	mxn: 'mx',
-	clp: 'cl',
-	ar: 'ar',
-	mx: 'mx',
-	cl: 'cl'
-};
-
-export function getCountryFromCurrency(currency: string): string {
-	return CURRENCY_TO_COUNTRY[currency.trim().toLowerCase()] ?? 'generico';
-}
+// Currency↔country mapping lives in the central locale config; re-exported
+// here for backwards compatibility with existing imports.
+export { CURRENCY_TO_COUNTRY, getCountryFromCurrency } from '$lib/config/locale';

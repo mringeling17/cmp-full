@@ -5,6 +5,7 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, Play } from '@lucide/svelte';
+	import { defaultPeriodString } from '$lib/utils/period';
 
 	let {
 		fileId,
@@ -17,13 +18,7 @@
 	} = $props();
 
 	// Default to previous month (most common case: invoicing prior month)
-	function defaultPeriod(): string {
-		const now = new Date();
-		const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-		return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-	}
-
-	let period = $state(defaultPeriod());
+	let period = $state(defaultPeriodString());
 	let processing = $state(false);
 	let result = $state<{
 		created: number;

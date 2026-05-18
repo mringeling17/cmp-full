@@ -5,6 +5,7 @@
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, FileSpreadsheet, Upload } from '@lucide/svelte';
+	import { defaultPeriodString } from '$lib/utils/period';
 	import type { FileRecord } from '$lib/stores/files';
 
 	let {
@@ -15,15 +16,9 @@
 		onGenerated?: () => void;
 	} = $props();
 
-	function defaultPeriod(): string {
-		const now = new Date();
-		const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-		return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-	}
-
 	let selectedFileId = $state<string>('');
 	let xubioFile = $state<File | null>(null);
-	let period = $state(defaultPeriod());
+	let period = $state(defaultPeriodString());
 	let processing = $state(false);
 	let result = $state<{
 		matched: number;
