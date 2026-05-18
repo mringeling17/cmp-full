@@ -7,8 +7,7 @@ interface CurrencyConfig {
 
 const CURRENCY_CONFIGS: Record<string, CurrencyConfig> = {
 	ar: { code: 'ARS', symbol: '$', locale: 'es-AR', decimals: 2 },
-	cl: { code: 'CLP', symbol: '$', locale: 'es-CL', decimals: 0 },
-	mx: { code: 'MXN', symbol: '$', locale: 'es-MX', decimals: 2 }
+	cl: { code: 'CLP', symbol: '$', locale: 'es-CL', decimals: 0 }
 };
 
 export function getCurrencyConfig(country: string): CurrencyConfig {

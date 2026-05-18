@@ -3,13 +3,14 @@ import type { RequestHandler } from './$types';
 import { createAdminClient } from '$lib/services/supabase-admin';
 import { parseInvoiceSummary, generateBillingExcel } from '$lib/services/excel';
 import { parsePeriodPart, validatePeriodOverride } from '$lib/utils/period';
-import { STORAGE_BUCKET, PROCESSED_PREFIX } from '$lib/config/constants';
+import { STORAGE_BUCKET, PROCESSED_PREFIX, EXCEL_MIME } from '$lib/config/constants';
 import { getEnglishMonthName, resolveBillingCountry } from '$lib/config/locale';
+import { FILE_TYPE, FILE_STATUS, LOG_STATUS } from '$lib/config/file-types';
+import { requireAdmin } from '$lib/server/auth';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const denied = requireAdmin(locals);
+	if (denied) return denied;
 
 	const supabase = createAdminClient();
 
@@ -60,7 +61,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			for (const err of parseErrors) {
 				await supabase.from('files_log').insert({
 					path: fileRecord.filename,
-					status: 'error',
+					status: LOG_STATUS.ERROR,
 					message: err,
 					created_at: new Date().toISOString()
 				});
@@ -211,13 +212,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const { error: uploadErr } = await supabase.storage
 			.from(STORAGE_BUCKET)
 			.upload(outputPath, outputBuffer, {
-				contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+				contentType: EXCEL_MIME,
 				upsert: true
 			});
 		if (uploadErr) {
 			await supabase.from('files_log').insert({
 				path: fileRecord.filename,
-				status: 'error',
+				status: LOG_STATUS.ERROR,
 				message: `Storage upload failed for ${outputPath}: ${uploadErr.message}`,
 				created_at: new Date().toISOString()
 			});
@@ -231,8 +232,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await supabase.from('files').insert({
 			filename: outputFilename,
 			storage_path: outputPath,
-			file_type: 'facturacion',
-			status: 'active',
+			file_type: FILE_TYPE.FACTURACION,
+			status: FILE_STATUS.ACTIVE,
 			processed: true,
 			uploaded_at: new Date().toISOString(),
 			processed_at: new Date().toISOString()
@@ -251,7 +252,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Log success
 		await supabase.from('files_log').insert({
 			path: fileRecord.filename,
-			status: 'success',
+			status: LOG_STATUS.SUCCESS,
 			message: `Processed ${rows.length} invoices (${results.created} created, ${results.updated} updated). Output: ${outputPath}`,
 			created_at: new Date().toISOString()
 		});

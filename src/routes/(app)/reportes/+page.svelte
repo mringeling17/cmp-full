@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { SPANISH_MONTHS } from '$lib/config/locale';
 	import AgGridSvelte from 'ag-grid-svelte5';
 	import { ClientSideRowModelModule } from '@ag-grid-community/client-side-row-model';
 	import type { ColDef, GridOptions } from '@ag-grid-community/core';
@@ -220,18 +221,7 @@
 
 	const monthOptions = [
 		{ value: 0, label: 'Todos' },
-		{ value: 1, label: 'Enero' },
-		{ value: 2, label: 'Febrero' },
-		{ value: 3, label: 'Marzo' },
-		{ value: 4, label: 'Abril' },
-		{ value: 5, label: 'Mayo' },
-		{ value: 6, label: 'Junio' },
-		{ value: 7, label: 'Julio' },
-		{ value: 8, label: 'Agosto' },
-		{ value: 9, label: 'Septiembre' },
-		{ value: 10, label: 'Octubre' },
-		{ value: 11, label: 'Noviembre' },
-		{ value: 12, label: 'Diciembre' }
+		...Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: SPANISH_MONTHS[i + 1] }))
 	];
 
 	// ── Report config (derived) ──

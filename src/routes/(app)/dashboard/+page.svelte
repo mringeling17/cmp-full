@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { selectedCountry, countryConfig } from '$lib/stores/country';
+	import { SHORT_SPANISH_MONTHS } from '$lib/config/locale';
 	import { filters } from '$lib/stores/filters';
 	import { valueMode, valueField, valueLabel } from '$lib/stores/value-mode';
 	import { formatCurrency, formatNumber } from '$lib/utils/currency';
@@ -332,8 +333,7 @@
 		// Format months for display
 		const monthLabels = months.map((m) => {
 			const [y, mo] = m.split('-');
-			const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-			return `${monthNames[parseInt(mo) - 1]} ${y.substring(2)}`;
+			return `${SHORT_SPANISH_MONTHS[parseInt(mo) - 1]} ${y.substring(2)}`;
 		});
 
 		const isNet = currentValueMode === 'net';

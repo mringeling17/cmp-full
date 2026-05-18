@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { SHORT_SPANISH_MONTHS } from '$lib/config/locale';
 	import MonthPicker from './MonthPicker.svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import DashboardChart from './DashboardChart.svelte';
@@ -177,7 +178,7 @@
 
 	// Monthly trend chart comparing both periods
 	const monthlyTrendComparisonOptions = $derived((): EChartsOption => {
-		const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+		const monthNames = SHORT_SPANISH_MONTHS;
 
 		// Group Period A invoices by YYYY-MM (preserves year so sort is chronological)
 		const monthlyA = new Map<string, number>();

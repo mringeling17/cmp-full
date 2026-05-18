@@ -1,15 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createTransporter } from '$lib/services/email';
+import { requireAdmin } from '$lib/server/auth';
+import { EMAIL_DOMAIN } from '$lib/config/constants';
 import { env } from '$env/dynamic/private';
 
 const SMTP_EMAIL = env.SMTP_EMAIL ?? '';
-const ALLOWED_TEST_DOMAINS = ['crossmediaplay.com'];
+const ALLOWED_TEST_DOMAINS = [EMAIL_DOMAIN];
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const denied = requireAdmin(locals);
+	if (denied) return denied;
 
 	try {
 		const { to } = await request.json();
@@ -20,7 +21,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		const domain = to.split('@')[1]?.toLowerCase();
 		if (!domain || !ALLOWED_TEST_DOMAINS.includes(domain)) {
-			return json({ success: false, error: 'Solo se permiten destinatarios @crossmediaplay.com' }, { status: 403 });
+			return json({ success: false, error: `Solo se permiten destinatarios @${EMAIL_DOMAIN}` }, { status: 403 });
 		}
 
 		const transporter = createTransporter();

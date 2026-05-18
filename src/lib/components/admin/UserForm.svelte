@@ -6,7 +6,8 @@
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { Loader2 } from '@lucide/svelte';
 	import { enhance } from '$app/forms';
-	import { allCountries } from '$lib/stores/country';
+	import { allCountries, ALL_COUNTRY_CODES } from '$lib/stores/country';
+	import { EMAIL_DOMAIN } from '$lib/config/constants';
 	import type { AdminUser } from './UserList.svelte';
 
 	let {
@@ -23,17 +24,17 @@
 	let username = $state('');
 	let password = $state('');
 	let role = $state('user');
-	let selectedCountries = $state<string[]>(['ar', 'cl', 'mx']);
+	let selectedCountries = $state<string[]>([...ALL_COUNTRY_CODES]);
 	let saving = $state(false);
 	let formError = $state('');
 
 	// Sync form when editUser changes
 	$effect(() => {
 		if (editUser) {
-			username = editUser.email.replace('@crossmediaplay.com', '');
+			username = editUser.email.replace(`@${EMAIL_DOMAIN}`, '');
 			password = '';
 			role = editUser.role;
-			selectedCountries = editUser.allowed_countries ?? ['ar', 'cl', 'mx'];
+			selectedCountries = editUser.allowed_countries ?? [...ALL_COUNTRY_CODES];
 		} else {
 			resetForm();
 		}
@@ -43,7 +44,7 @@
 		username = '';
 		password = '';
 		role = 'user';
-		selectedCountries = ['ar', 'cl', 'mx'];
+		selectedCountries = [...ALL_COUNTRY_CODES];
 		saving = false;
 		formError = '';
 	}

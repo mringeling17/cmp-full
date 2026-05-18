@@ -1,13 +1,14 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import { createAdminClient } from '$lib/services/supabase-admin';
+import { isAdmin } from '$lib/server/auth';
+import { EMAIL_DOMAIN, USER_LIST_PAGE_SIZE } from '$lib/config/constants';
+import { ALL_COUNTRY_CODES } from '$lib/stores/country';
+
+const VALID_ROLES = ['admin', 'user'];
 
 function getAdminClient() {
 	return createAdminClient();
-}
-
-function isUserAdmin(user: { app_metadata?: Record<string, unknown> } | null): boolean {
-	return user?.app_metadata?.role === 'admin';
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -15,7 +16,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		throw error(401, 'No autenticado');
 	}
 
-	if (!isUserAdmin(locals.user)) {
+	if (!isAdmin(locals.user)) {
 		throw error(403, 'Acceso denegado. Solo administradores pueden acceder a esta pagina.');
 	}
 
@@ -24,7 +25,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const {
 		data: { users },
 		error: listError
-	} = await adminClient.auth.admin.listUsers({ perPage: 100 });
+	} = await adminClient.auth.admin.listUsers({ perPage: USER_LIST_PAGE_SIZE });
 
 	if (listError) {
 		throw error(500, `Error al listar usuarios: ${listError.message}`);
@@ -61,7 +62,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
-		if (!locals.user || !isUserAdmin(locals.user)) {
+		if (!locals.user || !isAdmin(locals.user)) {
 			throw error(403, 'Acceso denegado');
 		}
 
@@ -75,9 +76,8 @@ export const actions: Actions = {
 			return { success: false, error: 'Usuario y contrasena son requeridos', action: 'create' };
 		}
 
-		const email = username.includes('@') ? username : `${username}@crossmediaplay.com`;
+		const email = username.includes('@') ? username : `${username}@${EMAIL_DOMAIN}`;
 
-		const VALID_ROLES = ['admin', 'user'];
 		if (!VALID_ROLES.includes(role)) {
 			return { success: false, error: 'Rol inválido', action: 'create' };
 		}
@@ -112,7 +112,7 @@ export const actions: Actions = {
 		}
 
 		// Create user profile
-		const allowedCountries = countries.length === 3 ? null : countries;
+		const allowedCountries = countries.length === ALL_COUNTRY_CODES.length ? null : countries;
 
 		await adminClient.from('user_profiles').upsert({
 			id: createData.user.id,
@@ -129,7 +129,7 @@ export const actions: Actions = {
 	},
 
 	update: async ({ request, locals }) => {
-		if (!locals.user || !isUserAdmin(locals.user)) {
+		if (!locals.user || !isAdmin(locals.user)) {
 			throw error(403, 'Acceso denegado');
 		}
 
@@ -142,7 +142,6 @@ export const actions: Actions = {
 			return { success: false, error: 'Datos incompletos', action: 'update' };
 		}
 
-		const VALID_ROLES = ['admin', 'user'];
 		if (!VALID_ROLES.includes(role)) {
 			return { success: false, error: 'Rol inválido', action: 'update' };
 		}
@@ -163,7 +162,7 @@ export const actions: Actions = {
 		}
 
 		// Update country access
-		const allowedCountries = countries.length === 3 ? null : countries;
+		const allowedCountries = countries.length === ALL_COUNTRY_CODES.length ? null : countries;
 
 		await adminClient.from('user_profiles').upsert({
 			id: userId,
@@ -181,7 +180,7 @@ export const actions: Actions = {
 	},
 
 	delete: async ({ request, locals }) => {
-		if (!locals.user || !isUserAdmin(locals.user)) {
+		if (!locals.user || !isAdmin(locals.user)) {
 			throw error(403, 'Acceso denegado');
 		}
 

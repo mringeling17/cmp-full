@@ -1,7 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import { browser } from '$app/environment';
 
-export type CountryCode = 'ar' | 'cl' | 'mx';
+export type CountryCode = 'ar' | 'cl';
 
 export interface CountryConfig {
 	code: CountryCode;
@@ -28,14 +28,6 @@ export const COUNTRIES: Record<CountryCode, CountryConfig> = {
 		currencySymbol: '$',
 		locale: 'es-CL',
 		flag: '\u{1F1E8}\u{1F1F1}'
-	},
-	mx: {
-		code: 'mx',
-		name: 'Mexico',
-		currency: 'MXN',
-		currencySymbol: '$',
-		locale: 'es-MX',
-		flag: '\u{1F1F2}\u{1F1FD}'
 	}
 };
 
@@ -50,3 +42,6 @@ if (browser) {
 
 export const countryConfig = derived(selectedCountry, ($country) => COUNTRIES[$country]);
 export const allCountries = Object.values(COUNTRIES);
+
+/** All supported country codes, e.g. ['ar', 'cl']. */
+export const ALL_COUNTRY_CODES = Object.keys(COUNTRIES) as CountryCode[];

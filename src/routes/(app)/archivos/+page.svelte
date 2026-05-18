@@ -12,6 +12,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, Send } from '@lucide/svelte';
+	import { FILE_TYPE, FILE_STATUS } from '$lib/config/file-types';
 
 	// Reactive country value
 	let country = $state('ar');
@@ -20,14 +21,20 @@
 	// Processed Invoice Summary files (for credit notes generation)
 	const processedInvoiceSummaries = $derived(
 		$filesList.filter(
-			(f) => f.file_type === 'invoice_summary' && f.processed === true && f.status === 'active'
+			(f) =>
+				f.file_type === FILE_TYPE.INVOICE_SUMMARY &&
+				f.processed === true &&
+				f.status === FILE_STATUS.ACTIVE
 		)
 	);
 
 	// Pending certificaciones (not processed)
 	const pendingCertificaciones = $derived(
 		$filesList.filter(
-			(f) => f.file_type === 'certificaciones_pdf' && f.processed !== true && f.status === 'active'
+			(f) =>
+				f.file_type === FILE_TYPE.CERTIFICACIONES_PDF &&
+				f.processed !== true &&
+				f.status === FILE_STATUS.ACTIVE
 		)
 	);
 
@@ -35,7 +42,7 @@
 	let processingFile = $state<FileRecord | null>(null);
 
 	function loadFiles() {
-		fetchFiles({ status: 'active' });
+		fetchFiles({ status: FILE_STATUS.ACTIVE });
 	}
 
 	// React to country changes

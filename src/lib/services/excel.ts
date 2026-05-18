@@ -7,7 +7,17 @@ import {
 	getCurrencyDisplayName,
 	resolveBillingCountry
 } from '$lib/config/locale';
-import { XUBIO_DOC_NUMBER } from '$lib/config/constants';
+import {
+	XUBIO_DOC_NUMBER,
+	MIN_YEAR,
+	MAX_YEAR,
+	INVOICE_SUMMARY_SHEET,
+	INVOICE_SUMMARY_DATE_FROM_CELL,
+	INVOICE_SUMMARY_HEADER_SKIP_ROWS,
+	EXCEL_EPOCH_OFFSET_DAYS,
+	EXCEL_SECONDS_PER_DAY
+} from '$lib/config/constants';
+import { XUBIO } from '$lib/config/xubio';
 import { previousMonthPeriod } from '$lib/utils/period';
 import { calculateTax } from '$lib/utils/tax';
 
@@ -29,7 +39,7 @@ export function extractYearFromFilename(filename: string): number | null {
 	for (const part of parts) {
 		if (/^\d{4}$/.test(part)) {
 			const y = parseInt(part);
-			if (y >= 2020 && y <= 2100) return y;
+			if (y >= MIN_YEAR && y <= MAX_YEAR) return y;
 		}
 	}
 	return null;
@@ -79,25 +89,29 @@ export function parseInvoiceSummary(
 	errors: string[];
 } {
 	const workbook = XLSX.read(buffer, { type: 'array' });
-	const sheet = workbook.Sheets['Invoice Summary'];
-	if (!sheet) throw new Error('Sheet "Invoice Summary" not found');
+	const sheet = workbook.Sheets[INVOICE_SUMMARY_SHEET];
+	if (!sheet) throw new Error(`Sheet "${INVOICE_SUMMARY_SHEET}" not found`);
 
-	// Extract month/year from "Date From" cell (B4) which is an Excel serial date
+	// Extract month/year from the "Date From" cell which is an Excel serial date
 	let headerMonth: number | null = null;
 	let headerYear: number | null = null;
-	const dateFromCell = sheet['B4'];
+	const dateFromCell = sheet[INVOICE_SUMMARY_DATE_FROM_CELL];
 	if (dateFromCell && typeof dateFromCell.v === 'number') {
 		// Convert Excel serial date to JS Date (Excel epoch: 1900-01-01, with the off-by-one bug)
-		const excelDate = new Date((dateFromCell.v - 25569) * 86400 * 1000);
+		const excelDate = new Date(
+			(dateFromCell.v - EXCEL_EPOCH_OFFSET_DAYS) * EXCEL_SECONDS_PER_DAY * 1000
+		);
 		const y = excelDate.getUTCFullYear();
-		if (y >= 2020 && y <= 2100) {
+		if (y >= MIN_YEAR && y <= MAX_YEAR) {
 			headerMonth = excelDate.getUTCMonth() + 1;
 			headerYear = y;
 		}
 	}
 
 	// Read with header at row 6 (skip 5 rows)
-	const rawJsonData: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { range: 5 });
+	const rawJsonData: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, {
+		range: INVOICE_SUMMARY_HEADER_SKIP_ROWS
+	});
 
 	// Normalize column names: trim whitespace from keys
 	const rawData = rawJsonData.map((row) => {
@@ -266,7 +280,7 @@ export function generateBillingExcel(
 		outputRows.push({
 			NUMERODECONTROL: controlNum,
 			CLIENTE: inv.agency,
-			TIPO: 1,
+			TIPO: XUBIO.TIPO_FACTURA,
 			NUMERO: XUBIO_DOC_NUMBER,
 			FECHA: fechaStr,
 			VENCIMIENTODELCOBRO: vencimientoStr,
@@ -296,10 +310,10 @@ export function generateBillingExcel(
 			MONEDA: '',
 			COTIZACION: '',
 			OBSERVACIONES: '',
-			PRODUCTOSERVICIO: 'Servicio Publicidad',
-			CENTRODECOSTO: 'NBCU ON AIR',
+			PRODUCTOSERVICIO: XUBIO.PRODUCTO_SERVICIO,
+			CENTRODECOSTO: XUBIO.CENTRO_COSTO,
 			PRODUCTOOBSERVACION: `${capitalizedMonth}, ${year}`,
-			CANTIDAD: 1,
+			CANTIDAD: XUBIO.CANTIDAD,
 			PRECIO: precio,
 			DESCUENTO: '',
 			IMPORTE: precio,
@@ -309,7 +323,7 @@ export function generateBillingExcel(
 
 	const ws = XLSX.utils.json_to_sheet(outputRows, { header: outputColumns });
 	const wb = XLSX.utils.book_new();
-	XLSX.utils.book_append_sheet(wb, ws, 'Facturacion');
+	XLSX.utils.book_append_sheet(wb, ws, XUBIO.SHEET_BILLING);
 	return new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }));
 }
 
@@ -426,13 +440,13 @@ export function generateCreditNotesExcel(
 		outputRows.push({
 			NUMERODECONTROL: controlNum,
 			CLIENTE: m.clienteXubio,
-			TIPO: 3,
+			TIPO: XUBIO.TIPO_NOTA_CREDITO,
 			NUMERO: XUBIO_DOC_NUMBER,
 			FECHA: fechaStr,
 			VENCIMIENTODELCOBRO: vencimientoStr,
 			COMPROBANTEASOCIADO: m.comprobante,
 			MONEDA: moneda,
-			COTIZACION: 1,
+			COTIZACION: XUBIO.COTIZACION,
 			OBSERVACIONES: m.observacion,
 			PRODUCTOSERVICIO: '',
 			CENTRODECOSTO: '',
@@ -456,10 +470,10 @@ export function generateCreditNotesExcel(
 			MONEDA: '',
 			COTIZACION: '',
 			OBSERVACIONES: '',
-			PRODUCTOSERVICIO: 'Servicio Publicidad',
-			CENTRODECOSTO: 'NBCU ON AIR',
+			PRODUCTOSERVICIO: XUBIO.PRODUCTO_SERVICIO,
+			CENTRODECOSTO: XUBIO.CENTRO_COSTO,
 			PRODUCTOOBSERVACION: `${monthName}, ${year}`,
-			CANTIDAD: 1,
+			CANTIDAD: XUBIO.CANTIDAD,
 			PRECIO: commission,
 			DESCUENTO: 0,
 			IMPORTE: commission,
@@ -469,6 +483,6 @@ export function generateCreditNotesExcel(
 
 	const ws = XLSX.utils.json_to_sheet(outputRows, { header: outputColumns });
 	const wb = XLSX.utils.book_new();
-	XLSX.utils.book_append_sheet(wb, ws, 'NotasCredito');
+	XLSX.utils.book_append_sheet(wb, ws, XUBIO.SHEET_CREDIT_NOTES);
 	return new Uint8Array(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }));
 }

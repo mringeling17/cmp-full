@@ -11,14 +11,17 @@ import { parsePeriodPart, validatePeriodOverride } from '$lib/utils/period';
 import {
 	STORAGE_BUCKET,
 	PROCESSED_PREFIX,
-	MAX_UPLOAD_SIZE_BYTES
+	MAX_UPLOAD_SIZE_BYTES,
+	EXCEL_MIME,
+	EXCEL_UPLOAD_MIME_TYPES
 } from '$lib/config/constants';
 import { getSpanishMonthName, resolveBillingCountry } from '$lib/config/locale';
+import { FILE_TYPE, FILE_STATUS, LOG_STATUS } from '$lib/config/file-types';
+import { requireAdmin } from '$lib/server/auth';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const denied = requireAdmin(locals);
+	if (denied) return denied;
 
 	const supabase = createAdminClient();
 
@@ -51,11 +54,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (xubioFile.size > MAX_UPLOAD_SIZE_BYTES) {
 			return json({ success: false, error: 'El archivo excede el tamaño máximo de 10MB' }, { status: 400 });
 		}
-		const allowedTypes = [
-			'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-			'application/vnd.ms-excel'
-		];
-		if (xubioFile.type && !allowedTypes.includes(xubioFile.type)) {
+		if (xubioFile.type && !EXCEL_UPLOAD_MIME_TYPES.includes(xubioFile.type)) {
 			return json({ success: false, error: 'Tipo de archivo no permitido. Solo se aceptan archivos Excel.' }, { status: 400 });
 		}
 
@@ -118,13 +117,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const { error: uploadErr } = await supabase.storage
 			.from(STORAGE_BUCKET)
 			.upload(outputPath, outputBuffer, {
-				contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+				contentType: EXCEL_MIME,
 				upsert: true
 			});
 		if (uploadErr) {
 			await supabase.from('files_log').insert({
 				path: fileRecord.filename,
-				status: 'error',
+				status: LOG_STATUS.ERROR,
 				message: `Storage upload failed for ${outputPath}: ${uploadErr.message}`,
 				created_at: new Date().toISOString()
 			});
@@ -138,8 +137,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await supabase.from('files').insert({
 			filename: outputFilename,
 			storage_path: outputPath,
-			file_type: 'credit_notes',
-			status: 'active',
+			file_type: FILE_TYPE.CREDIT_NOTES,
+			status: FILE_STATUS.ACTIVE,
 			processed: true,
 			uploaded_at: new Date().toISOString(),
 			processed_at: new Date().toISOString()
@@ -148,7 +147,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// 7. Log
 		await supabase.from('files_log').insert({
 			path: outputFilename,
-			status: 'success',
+			status: LOG_STATUS.SUCCESS,
 			message: `Generated ${matches.length} credit notes. ${unmatched.length} unmatched invoices.`,
 			created_at: new Date().toISOString()
 		});

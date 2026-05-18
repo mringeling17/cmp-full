@@ -5,10 +5,9 @@
 	import { formatDate } from '$lib/utils/dates';
 	import { downloadFile, softDeleteFile, markFileProcessed, fetchFiles } from '$lib/stores/files';
 	import type { FileRecord } from '$lib/stores/files';
-	import { FILE_TYPE_LABELS } from './FileTypeDetector';
+	import { FILE_TYPE_LABELS, FILE_TYPE_OPTIONS, FILE_TYPE } from './FileTypeDetector';
 	import { toast } from 'svelte-sonner';
 	import * as Select from '$lib/components/ui/select/index.js';
-	import { FILE_TYPE_OPTIONS } from './FileTypeDetector';
 	import { mode } from 'mode-watcher';
 
 	let gridClass = $derived(mode.current === 'dark' ? 'ag-theme-quartz-dark' : 'ag-theme-quartz');
@@ -168,7 +167,7 @@
 
 				// Process Excel button - for invoice_summary files (processed or not)
 				if (
-					params.data.file_type === 'invoice_summary' &&
+					params.data.file_type === FILE_TYPE.INVOICE_SUMMARY &&
 					onProcessExcel
 				) {
 					const processExcelBtn = document.createElement('button');

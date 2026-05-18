@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { createSupabaseBrowserClient } from '$lib/services/supabase';
+import { EMAIL_DOMAIN } from '$lib/config/constants';
 import type { User, Session } from '@supabase/supabase-js';
 
 const supabase = createSupabaseBrowserClient();
@@ -8,7 +9,7 @@ export const user = writable<User | null>(null);
 export const session = writable<Session | null>(null);
 
 export async function signIn(username: string, password: string) {
-	const email = `${username}@crossmediaplay.com`;
+	const email = `${username}@${EMAIL_DOMAIN}`;
 	const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 	if (error) throw error;
 	user.set(data.user);

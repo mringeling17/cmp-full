@@ -7,24 +7,26 @@ import {
 	sendCertificationEmail,
 	sendMissingEmailNotification
 } from '$lib/services/email';
+import { requireAdmin } from '$lib/server/auth';
+import { STORAGE_BUCKET, CERT_PENDING_WINDOW_MS } from '$lib/config/constants';
+import { FILE_TYPE, FILE_STATUS } from '$lib/config/file-types';
 
 export const POST: RequestHandler = async ({ locals }) => {
-	if (!locals.user || locals.user.app_metadata?.role !== 'admin') {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
+	const denied = requireAdmin(locals);
+	if (denied) return denied;
 
 	const supabase = createAdminClient();
 
 	try {
 		// 1. Query pending certification files (last 5 days)
-		const cutoffDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+		const cutoffDate = new Date(Date.now() - CERT_PENDING_WINDOW_MS).toISOString();
 
 		const { data: files } = await supabase
 			.from('files')
 			.select('id, filename, file_type, client_id, invoice_number, storage_path')
-			.eq('file_type', 'certificaciones_pdf')
+			.eq('file_type', FILE_TYPE.CERTIFICACIONES_PDF)
 			.eq('processed', false)
-			.eq('status', 'active')
+			.eq('status', FILE_STATUS.ACTIVE)
 			.gte('uploaded_at', cutoffDate);
 
 		if (!files || files.length === 0) {
@@ -140,7 +142,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 			const attachments: { filename: string; content: Buffer }[] = [];
 			for (const item of flist) {
 				const { data: fileData, error } = await supabase.storage
-					.from('uploads')
+					.from(STORAGE_BUCKET)
 					.download(item.storage_path);
 				if (error || !fileData) continue;
 				const buffer = Buffer.from(await fileData.arrayBuffer());

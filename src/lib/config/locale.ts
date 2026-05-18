@@ -65,6 +65,22 @@ export function getSpanishMonthName(month: number): string {
 	return SPANISH_MONTHS[month] ?? '';
 }
 
+/** Abbreviated Spanish month names, 0-indexed (Ene=0 … Dic=11) for charts. */
+export const SHORT_SPANISH_MONTHS = [
+	'Ene',
+	'Feb',
+	'Mar',
+	'Abr',
+	'May',
+	'Jun',
+	'Jul',
+	'Ago',
+	'Sep',
+	'Oct',
+	'Nov',
+	'Dic'
+] as const;
+
 /** 1-indexed English month names (index 0 is empty for convenience). */
 export const ENGLISH_MONTHS = [
 	'',
@@ -94,10 +110,8 @@ export function getEnglishMonthName(month: number): string {
 /** Currency code / country code → canonical country code. */
 export const CURRENCY_TO_COUNTRY: Record<string, string> = {
 	ars: 'ar',
-	mxn: 'mx',
 	clp: 'cl',
 	ar: 'ar',
-	mx: 'mx',
 	cl: 'cl'
 };
 
@@ -109,11 +123,10 @@ export function getCountryFromCurrency(currency: string): string {
 /** Currency display name used in the billing/credit-note Excel MONEDA column. */
 export const CURRENCY_DISPLAY_NAME: Record<string, string> = {
 	ar: 'Pesos Argentinos',
-	cl: 'Pesos Chilenos',
-	mx: 'Pesos Mexicanos'
+	cl: 'Pesos Chilenos'
 };
 
-const BILLING_COUNTRIES = new Set(['ar', 'cl', 'mx']);
+const BILLING_COUNTRIES = new Set(['ar', 'cl']);
 
 /**
  * Country to use for billing math/labels. If the country could not be

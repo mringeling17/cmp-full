@@ -2,6 +2,11 @@ import { randomBytes } from 'crypto';
 import type { Actions } from './$types';
 import { createAdminClient } from '$lib/services/supabase-admin';
 import { sendPasswordResetEmail } from '$lib/services/email';
+import {
+	EMAIL_DOMAIN,
+	PASSWORD_RESET_TOKEN_TTL_MS,
+	USER_LIST_PAGE_SIZE
+} from '$lib/config/constants';
 
 export const actions: Actions = {
 	default: async ({ request, url }) => {
@@ -12,7 +17,7 @@ export const actions: Actions = {
 			return { success: true }; // Don't reveal validation details
 		}
 
-		const email = username.includes('@') ? username : `${username}@crossmediaplay.com`;
+		const email = username.includes('@') ? username : `${username}@${EMAIL_DOMAIN}`;
 
 		try {
 			const adminClient = createAdminClient();
@@ -20,7 +25,7 @@ export const actions: Actions = {
 			// Find user by email (perPage: 1000 to handle larger user bases)
 			const {
 				data: { users }
-			} = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+			} = await adminClient.auth.admin.listUsers({ perPage: USER_LIST_PAGE_SIZE });
 
 			const user = users?.find((u) => u.email === email);
 
@@ -31,7 +36,7 @@ export const actions: Actions = {
 
 			// Generate secure token
 			const token = randomBytes(32).toString('hex');
-			const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+			const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS).toISOString();
 
 			// Store token
 			await adminClient.from('password_reset_tokens').insert({

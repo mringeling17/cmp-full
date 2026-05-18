@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { selectedCountry, countryConfig } from '$lib/stores/country';
+	import { SHORT_SPANISH_MONTHS } from '$lib/config/locale';
 	import { formatCurrency, formatNumber } from '$lib/utils/currency';
 	import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
 	import DashboardChart from '$lib/components/dashboard/DashboardChart.svelte';
@@ -160,8 +161,7 @@
 
 		const monthLabels = months.map((m) => {
 			const [y, mo] = m.split('-');
-			const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-			return `${monthNames[parseInt(mo) - 1]} ${y.substring(2)}`;
+			return `${SHORT_SPANISH_MONTHS[parseInt(mo) - 1]} ${y.substring(2)}`;
 		});
 
 		return {
