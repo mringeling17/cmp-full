@@ -77,6 +77,48 @@ export interface ParsedInvoiceRow {
 	channelByFeed: string | null;
 }
 
+/**
+ * Finds the Invoice Summary worksheet. Exporters name the tab inconsistently
+ * ("Invoice Summary", "Sheet1", etc.), so we resolve by:
+ *   1. exact name match
+ *   2. case-insensitive / trimmed name match
+ *   3. STRUCTURE: a sheet whose header row (row 6) contains the mandatory
+ *      Invoice Summary columns (Invoice #, Agency, Client)
+ * Throws a clear error (listing the actual tabs) if none qualifies.
+ */
+function resolveInvoiceSummarySheet(workbook: XLSX.WorkBook): XLSX.WorkSheet {
+	const names = workbook.SheetNames;
+
+	const exact = names.find((n) => n === INVOICE_SUMMARY_SHEET);
+	if (exact) return workbook.Sheets[exact];
+
+	const ci = names.find(
+		(n) => n.trim().toLowerCase() === INVOICE_SUMMARY_SHEET.toLowerCase()
+	);
+	if (ci) return workbook.Sheets[ci];
+
+	const REQUIRED = ['invoice #', 'agency', 'client'];
+	for (const n of names) {
+		const sh = workbook.Sheets[n];
+		const headerRows = XLSX.utils.sheet_to_json<unknown[]>(sh, {
+			header: 1,
+			range: INVOICE_SUMMARY_HEADER_SKIP_ROWS,
+			blankrows: false
+		});
+		const header = (headerRows[0] ?? []).map((c) =>
+			String(c ?? '').trim().toLowerCase()
+		);
+		if (REQUIRED.every((col) => header.includes(col))) {
+			return workbook.Sheets[n];
+		}
+	}
+
+	throw new Error(
+		`No se encontró la hoja "Invoice Summary" (columnas Invoice #, Agency, Client en la fila 6). ` +
+			`Hojas en el archivo: ${names.join(', ')}`
+	);
+}
+
 export function parseInvoiceSummary(
 	buffer: ArrayBuffer,
 	filename: string,
@@ -90,8 +132,7 @@ export function parseInvoiceSummary(
 	periodSource: 'override' | 'header' | 'filename' | 'fallback';
 } {
 	const workbook = XLSX.read(buffer, { type: 'array' });
-	const sheet = workbook.Sheets[INVOICE_SUMMARY_SHEET];
-	if (!sheet) throw new Error(`Sheet "${INVOICE_SUMMARY_SHEET}" not found`);
+	const sheet = resolveInvoiceSummarySheet(workbook);
 
 	// Extract month/year from the "Date From" cell which is an Excel serial date
 	let headerMonth: number | null = null;
