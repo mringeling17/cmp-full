@@ -87,6 +87,7 @@ export function parseInvoiceSummary(
 	month: number;
 	year: number;
 	errors: string[];
+	periodSource: 'override' | 'header' | 'filename' | 'fallback';
 } {
 	const workbook = XLSX.read(buffer, { type: 'array' });
 	const sheet = workbook.Sheets[INVOICE_SUMMARY_SHEET];
@@ -213,16 +214,31 @@ export function parseInvoiceSummary(
 		);
 	}
 
-	// Priority: explicit override (from UI) > Excel header > filename > previous-month fallback.
-	// The fallback is ALWAYS the previous month, never the current one, to avoid
-	// silently labelling prior-period sales with the in-progress month.
+	// Priority: explicit override (from UI) > filename > Excel header > fallback.
+	// The FILENAME wins over the Excel B4 header — files are named by period
+	// (e.g. InvoiceSummary_Julio_cl.xlsx) and that is the reliable signal; the
+	// internal B4 header has proven unreliable. When neither the filename nor
+	// the header yields a period, `periodSource` is 'fallback' and the UI must
+	// ask the user explicitly (it does NOT silently use the fallback value).
+	const fnMonth = extractMonthFromFilename(filename);
+	const fnYear = extractYearFromFilename(filename);
 	const fallback = previousMonthPeriod();
-	const month =
-		options?.overrideMonth ?? headerMonth ?? extractMonthFromFilename(filename) ?? fallback.month;
-	const year =
-		options?.overrideYear ?? headerYear ?? extractYearFromFilename(filename) ?? fallback.year;
 
-	return { rows, country, month, year, errors };
+	let periodSource: 'override' | 'filename' | 'header' | 'fallback';
+	if (options?.overrideMonth != null || options?.overrideYear != null) {
+		periodSource = 'override';
+	} else if (fnMonth != null) {
+		periodSource = 'filename';
+	} else if (headerMonth != null) {
+		periodSource = 'header';
+	} else {
+		periodSource = 'fallback';
+	}
+
+	const month = options?.overrideMonth ?? fnMonth ?? headerMonth ?? fallback.month;
+	const year = options?.overrideYear ?? fnYear ?? headerYear ?? fallback.year;
+
+	return { rows, country, month, year, errors, periodSource };
 }
 
 export function generateBillingExcel(

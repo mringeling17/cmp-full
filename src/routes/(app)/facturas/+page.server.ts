@@ -4,7 +4,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const [clientsRes, agenciesRes, channelsRes] = await Promise.all([
 		locals.supabase.from('clients').select('id, name, country').order('name'),
 		locals.supabase.from('agencies').select('id, name, country').order('name'),
-		locals.supabase.from('invoices').select('channel').not('channel', 'is', null)
+		locals.supabase.from('invoices').select('channel').eq('hidden', false).not('channel', 'is', null)
 	]);
 
 	const channels = [

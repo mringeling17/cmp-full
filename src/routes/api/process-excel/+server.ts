@@ -164,6 +164,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					company_code: row.companyCode,
 					channel_by_feed: row.channelByFeed,
 					exhibition_month: `${year}-${String(month).padStart(2, '0')}`,
+					// A row present in the new file is always visible — un-hide it
+					// if it had been hidden by a previous replace sweep.
+					hidden: false,
 					created_at: new Date().toISOString()
 				};
 
@@ -195,6 +198,52 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				const message = err instanceof Error ? err.message : String(err);
 				results.errors.push(`Invoice ${row.invoiceNumber}: ${message}`);
 				rowFailures++;
+			}
+		}
+
+		// Full-month replace: invoices for this (period, country) that are no
+		// longer present in the uploaded file get hidden (soft-delete, never
+		// destroyed). Only run when every row succeeded, so a partial import
+		// can't wrongly hide real data.
+		// Guard `rows.length > 0`: a valid file that parsed to ZERO rows must
+		// never trigger the sweep — that would hide every invoice in the period.
+		let hiddenCount = 0;
+		if (rowFailures === 0 && rows.length > 0) {
+			const exhibitionMonth = `${year}-${String(month).padStart(2, '0')}`;
+			const presentKeys = new Set(
+				rows.map((r) => `${r.invoiceNumber}|${r.documentType ?? ''}`)
+			);
+			const { data: existingInPeriod, error: listErr } = await supabase
+				.from('invoices')
+				.select('id, invoice_number, document_type')
+				.eq('exhibition_month', exhibitionMonth)
+				.eq('country', country)
+				.eq('hidden', false);
+			if (listErr) {
+				results.errors.push(
+					`No se pudo barrer el período para ocultar facturas obsoletas: ${listErr.message}`
+				);
+			} else {
+				const toHide = (existingInPeriod ?? [])
+					.filter(
+						(inv) =>
+							!presentKeys.has(`${inv.invoice_number}|${inv.document_type ?? ''}`)
+					)
+					.map((inv) => inv.id);
+				for (let i = 0; i < toHide.length; i += 500) {
+					const batch = toHide.slice(i, i + 500);
+					const { error: hideErr } = await supabase
+						.from('invoices')
+						.update({ hidden: true })
+						.in('id', batch);
+					if (hideErr) {
+						results.errors.push(
+							`No se pudieron ocultar ${batch.length} facturas obsoletas: ${hideErr.message}`
+						);
+					} else {
+						hiddenCount += batch.length;
+					}
+				}
 			}
 		}
 
@@ -253,7 +302,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await supabase.from('files_log').insert({
 			path: fileRecord.filename,
 			status: LOG_STATUS.SUCCESS,
-			message: `Processed ${rows.length} invoices (${results.created} created, ${results.updated} updated). Output: ${outputPath}`,
+			message: `Processed ${rows.length} invoices (${results.created} created, ${results.updated} updated, ${hiddenCount} hidden as obsolete). Output: ${outputPath}`,
 			created_at: new Date().toISOString()
 		});
 
@@ -262,6 +311,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			created: results.created,
 			updated: results.updated,
 			skipped: results.skipped,
+			hidden: hiddenCount,
 			errors: results.errors,
 			outputPath,
 			country,

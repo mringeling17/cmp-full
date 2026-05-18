@@ -48,7 +48,8 @@ export async function fetchInvoices(params: {
 	let query = supabase
 		.from('invoices')
 		.select('*, clients(name)', { count: 'exact' })
-		.eq('country', country);
+		.eq('country', country)
+		.eq('hidden', false);
 
 	if (search) {
 		query = query.or(

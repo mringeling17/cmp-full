@@ -380,6 +380,7 @@ export type Database = {
 					channel_by_feed: string | null;
 					due_date: string | null;
 					exhibition_month: string | null;
+					hidden: boolean;
 				};
 				Insert: {
 					id?: string;
@@ -409,6 +410,7 @@ export type Database = {
 					channel_by_feed?: string | null;
 					due_date?: string | null;
 					exhibition_month?: string | null;
+					hidden?: boolean;
 				};
 				Update: {
 					id?: string;
@@ -438,6 +440,7 @@ export type Database = {
 					channel_by_feed?: string | null;
 					due_date?: string | null;
 					exhibition_month?: string | null;
+					hidden?: boolean;
 				};
 				Relationships: [
 					{

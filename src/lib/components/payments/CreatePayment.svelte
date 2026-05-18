@@ -119,6 +119,7 @@
 			.from('invoices')
 			.select('id, invoice_number, gross_value, client_id, clients(name)')
 			.eq('country', country)
+			.eq('hidden', false)
 			.or(
 				`invoice_number.ilike.%${searchQuery}%,agency.ilike.%${searchQuery}%,factura_interna.ilike.%${searchQuery}%`
 			)

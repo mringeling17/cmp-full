@@ -60,6 +60,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 				.from('invoices')
 				.select('client_id')
 				.eq('invoice_number', invoiceNumber)
+				.eq('hidden', false)
 				.limit(1)
 				.maybeSingle();
 
@@ -68,6 +69,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 					.from('invoices')
 					.select('client_id')
 					.eq('invoice_number', `${invoiceNumber}.0`)
+					.eq('hidden', false)
 					.limit(1)
 					.maybeSingle();
 				invoiceData = fallback;
