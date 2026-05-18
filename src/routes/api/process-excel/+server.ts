@@ -16,6 +16,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		if (!fileId) return json({ success: false, error: 'No fileId provided' }, { status: 400 });
 
+		const parsePeriodPart = (v: unknown): { value: number | null; valid: boolean } => {
+			if (v === undefined || v === null || v === '') return { value: null, valid: true };
+			const n = Number(v);
+			if (!Number.isFinite(n) || !Number.isInteger(n)) return { value: null, valid: false };
+			return { value: n, valid: true };
+		};
+		const monthParsed = parsePeriodPart(body.month);
+		const yearParsed = parsePeriodPart(body.year);
+		if (!monthParsed.valid || !yearParsed.valid) {
+			return json({ success: false, error: 'Mes o año inválido' }, { status: 400 });
+		}
+		const overrideMonth = monthParsed.value;
+		const overrideYear = yearParsed.value;
+
+		if (overrideMonth !== null && (overrideMonth < 1 || overrideMonth > 12)) {
+			return json({ success: false, error: 'Mes inválido' }, { status: 400 });
+		}
+		if (overrideYear !== null && (overrideYear < 2020 || overrideYear > 2100)) {
+			return json({ success: false, error: 'Año inválido' }, { status: 400 });
+		}
+
 		// Get file record from DB
 		const { data: fileRecord, error: dbErr } = await supabase
 			.from('files')
@@ -35,7 +56,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const buffer = await fileBlob.arrayBuffer();
 		const { rows, country, month, year, errors: parseErrors } = parseInvoiceSummary(
 			buffer,
-			fileRecord.filename
+			fileRecord.filename,
+			{ overrideMonth, overrideYear }
 		);
 
 		if (parseErrors.length > 0) {

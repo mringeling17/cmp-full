@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
+	import { Label } from '$lib/components/ui/label/index.js';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, Play } from '@lucide/svelte';
 
@@ -14,6 +16,14 @@
 		onProcessed?: () => void;
 	} = $props();
 
+	// Default to previous month (most common case: invoicing prior month)
+	function defaultPeriod(): string {
+		const now = new Date();
+		const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+		return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+	}
+
+	let period = $state(defaultPeriod());
 	let processing = $state(false);
 	let result = $state<{
 		created: number;
@@ -24,6 +34,18 @@
 	} | null>(null);
 
 	async function handleProcess() {
+		if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+			toast.error('Seleccioná un período válido');
+			return;
+		}
+		const [yearStr, monthStr] = period.split('-');
+		const year = parseInt(yearStr, 10);
+		const month = parseInt(monthStr, 10);
+		if (!year || !month || month < 1 || month > 12) {
+			toast.error('Período inválido');
+			return;
+		}
+
 		processing = true;
 		result = null;
 
@@ -31,7 +53,7 @@
 			const response = await fetch('/api/process-excel', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ fileId })
+				body: JSON.stringify({ fileId, month, year })
 			});
 
 			const data = await response.json();
@@ -68,7 +90,17 @@
 	}
 </script>
 
-<div class="flex items-center gap-2">
+<div class="flex flex-wrap items-end gap-3">
+	<div class="flex flex-col gap-1.5">
+		<Label for="process-period" class="text-xs">Período de facturación</Label>
+		<Input
+			id="process-period"
+			type="month"
+			bind:value={period}
+			disabled={processing}
+			class="h-9 w-[180px]"
+		/>
+	</div>
 	<Button
 		variant="outline"
 		size="sm"

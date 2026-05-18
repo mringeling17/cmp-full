@@ -48,7 +48,8 @@ const CURRENCY_TO_COUNTRY: Record<string, string> = {
 	cl: 'cl'
 };
 
-export function extractMonthFromFilename(filename: string): number {
+/** Returns the month number found in the filename, or null if none. */
+export function extractMonthFromFilename(filename: string): number | null {
 	const parts = filename.toLowerCase().split(/[_\-.\s]+/);
 	const sortedMonths = Object.entries(MONTH_MAP).sort((a, b) => b[0].length - a[0].length);
 	for (const part of parts) {
@@ -56,10 +57,11 @@ export function extractMonthFromFilename(filename: string): number {
 			if (part === name) return num;
 		}
 	}
-	return new Date().getMonth() + 1;
+	return null;
 }
 
-export function extractYearFromFilename(filename: string): number {
+/** Returns the 4-digit year found in the filename, or null if none. */
+export function extractYearFromFilename(filename: string): number | null {
 	const parts = filename.split(/[_\-.\s]+/);
 	for (const part of parts) {
 		if (/^\d{4}$/.test(part)) {
@@ -67,7 +69,17 @@ export function extractYearFromFilename(filename: string): number {
 			if (y >= 2020 && y <= 2100) return y;
 		}
 	}
-	return new Date().getFullYear();
+	return null;
+}
+
+/**
+ * Last-resort billing period: ALWAYS the previous month, never the current one.
+ * Used only when no period could be determined from the UI, Excel header, or filename.
+ */
+function previousMonthPeriod(): { month: number; year: number } {
+	const now = new Date();
+	const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+	return { month: prev.getMonth() + 1, year: prev.getFullYear() };
 }
 
 export function getCountryFromCurrency(currencyValue: string): string {
@@ -108,7 +120,8 @@ export interface ParsedInvoiceRow {
 
 export function parseInvoiceSummary(
 	buffer: ArrayBuffer,
-	filename: string
+	filename: string,
+	options?: { overrideMonth?: number | null; overrideYear?: number | null }
 ): {
 	rows: ParsedInvoiceRow[];
 	country: string;
@@ -228,9 +241,14 @@ export function parseInvoiceSummary(
 			? getCountryFromCurrency(rows[0].currency)
 			: 'generico';
 
-	// Priority: Excel header dates > filename > current date
-	const month = headerMonth ?? extractMonthFromFilename(filename);
-	const year = headerYear ?? extractYearFromFilename(filename);
+	// Priority: explicit override (from UI) > Excel header > filename > previous-month fallback.
+	// The fallback is ALWAYS the previous month, never the current one, to avoid
+	// silently labelling prior-period sales with the in-progress month.
+	const fallback = previousMonthPeriod();
+	const month =
+		options?.overrideMonth ?? headerMonth ?? extractMonthFromFilename(filename) ?? fallback.month;
+	const year =
+		options?.overrideYear ?? headerYear ?? extractYearFromFilename(filename) ?? fallback.year;
 
 	return { rows, country, month, year, errors };
 }

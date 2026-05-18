@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
 	import * as Select from '$lib/components/ui/select/index.js';
 	import { toast } from 'svelte-sonner';
 	import { Loader2, FileSpreadsheet, Upload } from '@lucide/svelte';
@@ -14,8 +15,15 @@
 		onGenerated?: () => void;
 	} = $props();
 
+	function defaultPeriod(): string {
+		const now = new Date();
+		const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+		return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+	}
+
 	let selectedFileId = $state<string>('');
 	let xubioFile = $state<File | null>(null);
+	let period = $state(defaultPeriod());
 	let processing = $state(false);
 	let result = $state<{
 		matched: number;
@@ -44,6 +52,17 @@
 			toast.error('Selecciona el Invoice Summary y sube el archivo Xubio');
 			return;
 		}
+		if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+			toast.error('Seleccioná un período válido');
+			return;
+		}
+		const [yearStr, monthStr] = period.split('-');
+		const year = parseInt(yearStr, 10);
+		const month = parseInt(monthStr, 10);
+		if (!year || !month || month < 1 || month > 12) {
+			toast.error('Período inválido');
+			return;
+		}
 
 		processing = true;
 		result = null;
@@ -52,6 +71,8 @@
 			const formData = new FormData();
 			formData.append('invoiceSummaryFileId', selectedFileId);
 			formData.append('xubioFile', xubioFile);
+			formData.append('month', String(month));
+			formData.append('year', String(year));
 
 			const response = await fetch('/api/generate-credit-notes', {
 				method: 'POST',
@@ -133,7 +154,19 @@
 			</div>
 		</div>
 
-		<!-- Step 3: Generate -->
+		<!-- Step 3: Period -->
+		<div class="space-y-1.5">
+			<label for="credit-notes-period" class="text-xs font-medium text-muted-foreground">Período</label>
+			<Input
+				id="credit-notes-period"
+				type="month"
+				bind:value={period}
+				disabled={processing}
+				class="h-9 w-[180px]"
+			/>
+		</div>
+
+		<!-- Step 4: Generate -->
 		<Button
 			size="sm"
 			disabled={processing || !selectedFileId || !xubioFile}

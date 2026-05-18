@@ -19,12 +19,34 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const formData = await request.formData();
 		const invoiceSummaryFileId = formData.get('invoiceSummaryFileId') as string | null;
 		const xubioFile = formData.get('xubioFile') as File | null;
+		const monthRaw = formData.get('month');
+		const yearRaw = formData.get('year');
 
 		if (!invoiceSummaryFileId) {
 			return json({ success: false, error: 'Falta el ID del Invoice Summary' }, { status: 400 });
 		}
 		if (!xubioFile) {
 			return json({ success: false, error: 'Falta el archivo Xubio' }, { status: 400 });
+		}
+
+		const parsePeriodPart = (v: FormDataEntryValue | null): { value: number | null; valid: boolean } => {
+			if (v === null || v === '') return { value: null, valid: true };
+			const n = Number(v);
+			if (!Number.isFinite(n) || !Number.isInteger(n)) return { value: null, valid: false };
+			return { value: n, valid: true };
+		};
+		const monthParsed = parsePeriodPart(monthRaw);
+		const yearParsed = parsePeriodPart(yearRaw);
+		if (!monthParsed.valid || !yearParsed.valid) {
+			return json({ success: false, error: 'Mes o año inválido' }, { status: 400 });
+		}
+		const overrideMonth = monthParsed.value;
+		const overrideYear = yearParsed.value;
+		if (overrideMonth !== null && (overrideMonth < 1 || overrideMonth > 12)) {
+			return json({ success: false, error: 'Mes inválido' }, { status: 400 });
+		}
+		if (overrideYear !== null && (overrideYear < 2020 || overrideYear > 2100)) {
+			return json({ success: false, error: 'Año inválido' }, { status: 400 });
 		}
 
 		const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -60,7 +82,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// 2. Parse both files
 		const isBuffer = await isBlob.arrayBuffer();
-		const { rows: invoiceRows, month, year } = parseInvoiceSummary(isBuffer, fileRecord.filename);
+		const { rows: invoiceRows, month, year } = parseInvoiceSummary(isBuffer, fileRecord.filename, {
+			overrideMonth,
+			overrideYear
+		});
 
 		const xubioBuffer = await xubioFile.arrayBuffer();
 		const xubioRows = parseXubioFile(xubioBuffer);
