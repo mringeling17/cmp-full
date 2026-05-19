@@ -18,8 +18,13 @@
 	let searchQuery = $state('');
 	let searchInput: HTMLInputElement | undefined = $state();
 
+	const allSelected = $derived(items.length > 0 && selected.length === items.length);
 	const displayText = $derived(
-		selected.length === 0 ? label : `${label} (${selected.length})`
+		selected.length === 0
+			? label
+			: allSelected
+				? `${label} (Todas)`
+				: `${label} (${selected.length})`
 	);
 
 	const filteredItems = $derived(
@@ -40,6 +45,10 @@
 
 	function clearAll() {
 		selected = [];
+	}
+
+	function selectAll() {
+		selected = items.map((i) => i.id);
 	}
 
 	$effect(() => {
@@ -75,6 +84,14 @@
 			</div>
 		{/if}
 		<div class="max-h-[300px] overflow-y-auto p-1">
+			{#if !allSelected}
+				<button
+					class="w-full text-left px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent rounded-sm"
+					onclick={selectAll}
+				>
+					Seleccionar todas
+				</button>
+			{/if}
 			{#if selected.length > 0}
 				<button
 					class="w-full text-left px-2 py-1.5 text-xs text-muted-foreground hover:bg-accent rounded-sm"
