@@ -5,6 +5,7 @@ type Invoice = {
 	spot_count?: number | null;
 	client_id?: string | null;
 	agency?: string | null;
+	agency_id?: string | null;
 	channel?: string | null;
 	country?: string | null;
 	[key: string]: unknown;
@@ -83,10 +84,19 @@ export function generateReportData(
 		filtered = filtered.filter((inv) => inv.client_id && config.filters.clientIds!.includes(inv.client_id));
 	}
 	if (config.filters.agencyIds && config.filters.agencyIds.length > 0) {
-		const agencyNames = agencyIdsToNames
-			? config.filters.agencyIds.map((id) => agencyIdsToNames.get(id)).filter(Boolean)
-			: config.filters.agencyIds;
-		filtered = filtered.filter((inv) => inv.agency && agencyNames.includes(inv.agency!));
+		if (agencyIdsToNames) {
+			filtered = filtered.filter((inv) => {
+				if (inv.agency_id) {
+					return config.filters.agencyIds!.includes(inv.agency_id);
+				}
+				// Fallback: match legacy text via id→name map
+				const agencyNames = config.filters.agencyIds!.map((id) => agencyIdsToNames.get(id)).filter(Boolean);
+				return inv.agency != null && agencyNames.includes(inv.agency);
+			});
+		} else {
+			// No map provided: fall back to treating agencyIds as names (legacy behaviour)
+			filtered = filtered.filter((inv) => inv.agency && config.filters.agencyIds!.includes(inv.agency));
+		}
 	}
 	if (config.filters.channels && config.filters.channels.length > 0) {
 		filtered = filtered.filter((inv) => inv.channel && config.filters.channels!.includes(inv.channel));
@@ -99,7 +109,7 @@ export function generateReportData(
 		if (config.rows === 'client') {
 			key = (inv.client_id && clientsMap.get(inv.client_id)) || 'Sin cliente';
 		} else if (config.rows === 'agency') {
-			key = inv.agency || 'Directo';
+			key = (inv.agency_id && agencyIdsToNames?.get(inv.agency_id)) || inv.agency || 'Directo';
 		} else {
 			key = inv.channel || 'Sin canal';
 		}

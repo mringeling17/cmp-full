@@ -15,6 +15,7 @@
 		type ReportRow
 	} from '$lib/utils/report-engine';
 	import { exportReportToExcel } from '$lib/utils/excel-export';
+	import { getTaxMultiplier } from '$lib/utils/tax';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card/index.js';
 	import MultiSelect from '$lib/components/dashboard/MultiSelect.svelte';
@@ -25,6 +26,9 @@
 	// ── Country ──
 	let country = $state('ar');
 	selectedCountry.subscribe((v) => (country = v));
+
+	// ── Report type selector ──
+	let reportType = $state<'facturacion' | 'cobrado' | 'pendiente'>('facturacion');
 
 	// ── Form state ──
 	let rowGroup = $state<'client' | 'agency' | 'channel'>('client');
@@ -38,6 +42,24 @@
 	let filterClientIds = $state<string[]>([]);
 	let filterAgencyIds = $state<string[]>([]);
 	let filterChannels = $state<string[]>([]);
+
+	// ── Report #5: Cobrado por mes ──
+	const defaultMonthFrom = (() => {
+		const d = new Date();
+		d.setMonth(d.getMonth() - 2);
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+	})();
+	const defaultMonthTo = (() => {
+		const d = new Date();
+		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+	})();
+	let cobradoMonthFrom = $state(defaultMonthFrom);
+	let cobradoMonthTo = $state(defaultMonthTo);
+	let cobradoFilterClientIds = $state<string[]>([]);
+	let cobradoFilterAgencyIds = $state<string[]>([]);
+
+	// ── Report #6: Pendiente por agencia/cliente ──
+	let pendienteGroup = $state<'agency' | 'client'>('client');
 
 	// ── Preset state ──
 	let presetName = $state('');
@@ -261,6 +283,138 @@
 		(data.invoices ?? []).filter((inv: any) => inv.country === country)
 	);
 
+	// ── Country-scoped payments (for reports #5 and #6) ──
+	const countryPayments = $derived(
+		(data.payments ?? []).filter((p: any) => p.country === country)
+	);
+
+	const countryPaymentIds = $derived(new Set(countryPayments.map((p: any) => p.id as string)));
+
+	// Payment details whose payment belongs to the current country
+	const countryPaymentDetails = $derived(
+		(data.paymentDetails ?? []).filter((d: any) => countryPaymentIds.has(d.payment_id))
+	);
+
+	// ── Report #5: Cobrado por mes ──
+	interface CobradoRow extends Record<string, string | number> {
+		mes: string;
+		total: number;
+	}
+
+	const cobradoRows = $derived.by((): CobradoRow[] => {
+		// Build set of payment_ids in range
+		const paymentIdToMonth = new Map<string, string>();
+		for (const p of countryPayments) {
+			const cm: string = (p as any).collection_month ?? '';
+			if (!cm) continue;
+			if (cobradoMonthFrom && cm < cobradoMonthFrom) continue;
+			if (cobradoMonthTo && cm > cobradoMonthTo) continue;
+			paymentIdToMonth.set((p as any).id, cm);
+		}
+
+		const monthTotals = new Map<string, number>();
+		for (const detail of countryPaymentDetails) {
+			const paymentId: string = (detail as any).payment_id;
+			const month = paymentIdToMonth.get(paymentId);
+			if (!month) continue;
+
+			// Apply agency/client filters if set
+			const inv = (detail as any).invoices;
+			if (cobradoFilterClientIds.length > 0) {
+				const clientId: string = inv?.client_id ?? '';
+				if (!cobradoFilterClientIds.includes(clientId)) continue;
+			}
+			if (cobradoFilterAgencyIds.length > 0) {
+				const agencyId: string = inv?.agency_id ?? '';
+				if (!cobradoFilterAgencyIds.includes(agencyId)) continue;
+			}
+
+			const amount: number = (detail as any).amount ?? 0;
+			monthTotals.set(month, (monthTotals.get(month) ?? 0) + amount);
+		}
+
+		return Array.from(monthTotals.entries())
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([mes, total]) => ({ mes, total }));
+	});
+
+	const cobradoTotal = $derived(cobradoRows.reduce((s, r) => s + r.total, 0));
+
+	// ── Report #6: Pendiente por agencia/cliente ──
+	interface PendienteRow extends Record<string, string | number> {
+		grupo: string;
+		facturado: number;
+		cobrado: number;
+		pendiente: number;
+	}
+
+	const pendienteRows = $derived.by((): PendienteRow[] => {
+		const taxMult = getTaxMultiplier(country);
+
+		// facturado con IVA per group key
+		const facturadoMap = new Map<string, { nombre: string; valor: number }>();
+		for (const inv of countryInvoices) {
+			const key =
+				pendienteGroup === 'agency'
+					? ((inv as any).agency_id as string | null) ?? 'sin-agencia'
+					: ((inv as any).client_id as string | null) ?? 'sin-cliente';
+			let nombre: string;
+			if (pendienteGroup === 'agency') {
+				nombre =
+					agencyIdsToNames.get(key) ??
+					((inv as any).agency as string | null) ??
+					'Sin agencia';
+			} else {
+				nombre = clientsMap.get(key) ?? 'Sin cliente';
+			}
+			const net: number = (inv as any).net_value ?? 0;
+			const existing = facturadoMap.get(key);
+			if (existing) {
+				existing.valor += net * taxMult;
+			} else {
+				facturadoMap.set(key, { nombre, valor: net * taxMult });
+			}
+		}
+
+		// cobrado per group key from payment details
+		const cobradoMap = new Map<string, number>();
+		for (const detail of countryPaymentDetails) {
+			const inv = (detail as any).invoices;
+			if (!inv) continue;
+			const key =
+				pendienteGroup === 'agency'
+					? ((inv.agency_id as string | null) ?? 'sin-agencia')
+					: ((inv.client_id as string | null) ?? 'sin-cliente');
+			const amount: number = (detail as any).amount ?? 0;
+			cobradoMap.set(key, (cobradoMap.get(key) ?? 0) + amount);
+		}
+
+		// Merge (union of facturadoMap and cobradoMap keys)
+		const allKeys = new Set([...facturadoMap.keys(), ...cobradoMap.keys()]);
+		const rows: PendienteRow[] = [];
+		for (const key of allKeys) {
+			const facturado = facturadoMap.get(key)?.valor ?? 0;
+			const cobrado = cobradoMap.get(key) ?? 0;
+			let nombre: string;
+			if (facturadoMap.has(key)) {
+				nombre = facturadoMap.get(key)!.nombre;
+			} else if (pendienteGroup === 'agency') {
+				nombre = agencyIdsToNames.get(key) ?? 'Sin agencia';
+			} else {
+				nombre = clientsMap.get(key) ?? 'Sin cliente';
+			}
+			rows.push({ grupo: nombre, facturado, cobrado, pendiente: facturado - cobrado });
+		}
+
+		return rows.sort((a, b) => b.pendiente - a.pendiente);
+	});
+
+	const pendienteTotals = $derived({
+		facturado: pendienteRows.reduce((s, r) => s + r.facturado, 0),
+		cobrado: pendienteRows.reduce((s, r) => s + r.cobrado, 0),
+		pendiente: pendienteRows.reduce((s, r) => s + r.pendiente, 0)
+	});
+
 	// ── Generate report ──
 	const reportRows = $derived(
 		generateReportData(countryInvoices, reportConfig, clientsMap, agencyIdsToNames)
@@ -372,6 +526,38 @@
 			`reporte_${rowGroup}_${filterYear}.xlsx`
 		);
 	}
+
+	function handleExportCobrado() {
+		const exportColumns = [
+			{ header: 'Mes', field: 'mes' },
+			{ header: 'Total cobrado', field: 'total' }
+		];
+		const rows: Record<string, string | number>[] = [
+			...cobradoRows,
+			{ mes: 'Total', total: cobradoTotal }
+		];
+		exportReportToExcel({ title: 'Cobrado por mes', rows, columns: exportColumns }, 'cobrado_por_mes.xlsx');
+	}
+
+	function handleExportPendiente() {
+		const groupLabel = pendienteGroup === 'agency' ? 'Agencia' : 'Cliente';
+		const exportColumns = [
+			{ header: groupLabel, field: 'grupo' },
+			{ header: 'Facturado c/IVA', field: 'facturado' },
+			{ header: 'Cobrado', field: 'cobrado' },
+			{ header: 'Pendiente', field: 'pendiente' }
+		];
+		const rows: Record<string, string | number>[] = [
+			...pendienteRows,
+			{
+				grupo: 'Total',
+				facturado: pendienteTotals.facturado,
+				cobrado: pendienteTotals.cobrado,
+				pendiente: pendienteTotals.pendiente
+			}
+		];
+		exportReportToExcel({ title: `Pendiente por ${groupLabel}`, rows, columns: exportColumns }, `pendiente_por_${pendienteGroup}.xlsx`);
+	}
 </script>
 
 <div class="flex flex-col gap-6 p-6">
@@ -381,14 +567,50 @@
 			<h1 class="text-2xl font-bold tracking-tight">Reportes</h1>
 			<p class="text-muted-foreground">Genera reportes personalizados</p>
 		</div>
-		{#if reportRows.length > 0}
+		{#if reportType === 'facturacion' && reportRows.length > 0}
 			<Button variant="outline" onclick={handleExport}>
+				<Download class="mr-2 h-4 w-4" />
+				Exportar Excel
+			</Button>
+		{:else if reportType === 'cobrado' && cobradoRows.length > 0}
+			<Button variant="outline" onclick={handleExportCobrado}>
+				<Download class="mr-2 h-4 w-4" />
+				Exportar Excel
+			</Button>
+		{:else if reportType === 'pendiente' && pendienteRows.length > 0}
+			<Button variant="outline" onclick={handleExportPendiente}>
 				<Download class="mr-2 h-4 w-4" />
 				Exportar Excel
 			</Button>
 		{/if}
 	</div>
 
+	<!-- Report type selector -->
+	<div class="flex flex-col gap-1.5">
+		<span class="text-xs font-medium text-muted-foreground">Tipo de reporte</span>
+		<div class="inline-flex rounded-md border border-input">
+			<button
+				class="px-3 py-1.5 text-sm cursor-pointer first:rounded-l-md {reportType === 'facturacion' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}"
+				onclick={() => (reportType = 'facturacion')}
+			>
+				Facturacion
+			</button>
+			<button
+				class="px-3 py-1.5 text-sm cursor-pointer border-l border-input {reportType === 'cobrado' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}"
+				onclick={() => (reportType = 'cobrado')}
+			>
+				Cobrado por mes
+			</button>
+			<button
+				class="px-3 py-1.5 text-sm cursor-pointer border-l border-input last:rounded-r-md {reportType === 'pendiente' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}"
+				onclick={() => (reportType = 'pendiente')}
+			>
+				Pendiente por grupo
+			</button>
+		</div>
+	</div>
+
+	{#if reportType === 'facturacion'}
 	<!-- Presets Card -->
 	<Card>
 		<CardHeader>
@@ -654,5 +876,170 @@
 				</p>
 			</CardContent>
 		</Card>
+	{/if}
+
+	{:else if reportType === 'cobrado'}
+	<!-- Report #5: Cobrado por mes -->
+	<Card>
+		<CardHeader>
+			<CardTitle>Filtros</CardTitle>
+		</CardHeader>
+		<CardContent>
+			<div class="flex flex-wrap items-end gap-3">
+				<div class="flex flex-col gap-1.5">
+					<span class="text-xs font-medium text-muted-foreground">Desde</span>
+					<input
+						type="month"
+						bind:value={cobradoMonthFrom}
+						class="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs"
+					/>
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<span class="text-xs font-medium text-muted-foreground">Hasta</span>
+					<input
+						type="month"
+						bind:value={cobradoMonthTo}
+						class="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-xs"
+					/>
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<span class="text-xs font-medium text-muted-foreground">Agencias</span>
+					<MultiSelect
+						label="Agencias"
+						items={countryAgencies}
+						bind:selected={cobradoFilterAgencyIds}
+						searchable={true}
+					/>
+				</div>
+				<div class="flex flex-col gap-1.5">
+					<span class="text-xs font-medium text-muted-foreground">Clientes</span>
+					<MultiSelect
+						label="Clientes"
+						items={countryClients}
+						bind:selected={cobradoFilterClientIds}
+						searchable={true}
+					/>
+				</div>
+			</div>
+		</CardContent>
+	</Card>
+
+	{#if cobradoRows.length > 0}
+		<Card>
+			<CardHeader>
+				<CardTitle>Cobrado por mes ({cobradoRows.length} {cobradoRows.length === 1 ? 'mes' : 'meses'})</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b border-border">
+								<th class="py-2 pr-4 text-left font-medium text-muted-foreground">Mes</th>
+								<th class="py-2 text-right font-medium text-muted-foreground">Total cobrado</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each cobradoRows as row}
+								<tr class="border-b border-border/50 hover:bg-muted/30">
+									<td class="py-2 pr-4">{row.mes}</td>
+									<td class="py-2 text-right">{formatCurrency(row.total, country)}</td>
+								</tr>
+							{/each}
+						</tbody>
+						<tfoot>
+							<tr class="border-t-2 border-border font-semibold">
+								<td class="py-2 pr-4">Total</td>
+								<td class="py-2 text-right">{formatCurrency(cobradoTotal, country)}</td>
+							</tr>
+						</tfoot>
+					</table>
+				</div>
+			</CardContent>
+		</Card>
+	{:else}
+		<Card>
+			<CardContent class="py-12">
+				<p class="text-center text-muted-foreground">
+					No hay cobros en el rango seleccionado.
+				</p>
+			</CardContent>
+		</Card>
+	{/if}
+
+	{:else if reportType === 'pendiente'}
+	<!-- Report #6: Pendiente por agencia/cliente -->
+	<Card>
+		<CardHeader>
+			<CardTitle>Configuracion</CardTitle>
+		</CardHeader>
+		<CardContent>
+			<div class="flex flex-col gap-1.5">
+				<span class="text-xs font-medium text-muted-foreground">Agrupar por</span>
+				<div class="inline-flex rounded-md border border-input">
+					<button
+						class="px-3 py-1.5 text-sm cursor-pointer first:rounded-l-md {pendienteGroup === 'client' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}"
+						onclick={() => (pendienteGroup = 'client')}
+					>
+						Cliente
+					</button>
+					<button
+						class="px-3 py-1.5 text-sm cursor-pointer border-l border-input last:rounded-r-md {pendienteGroup === 'agency' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}"
+						onclick={() => (pendienteGroup = 'agency')}
+					>
+						Agencia
+					</button>
+				</div>
+			</div>
+		</CardContent>
+	</Card>
+
+	{#if pendienteRows.length > 0}
+		<Card>
+			<CardHeader>
+				<CardTitle>Pendiente por {pendienteGroup === 'agency' ? 'agencia' : 'cliente'} ({pendienteRows.length} {pendienteRows.length === 1 ? 'fila' : 'filas'})</CardTitle>
+			</CardHeader>
+			<CardContent>
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b border-border">
+								<th class="py-2 pr-4 text-left font-medium text-muted-foreground">{pendienteGroup === 'agency' ? 'Agencia' : 'Cliente'}</th>
+								<th class="py-2 pr-4 text-right font-medium text-muted-foreground">Facturado c/IVA</th>
+								<th class="py-2 pr-4 text-right font-medium text-muted-foreground">Cobrado</th>
+								<th class="py-2 text-right font-medium text-muted-foreground">Pendiente</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each pendienteRows as row}
+								<tr class="border-b border-border/50 hover:bg-muted/30">
+									<td class="py-2 pr-4">{row.grupo}</td>
+									<td class="py-2 pr-4 text-right">{formatCurrency(row.facturado, country)}</td>
+									<td class="py-2 pr-4 text-right">{formatCurrency(row.cobrado, country)}</td>
+									<td class="py-2 text-right {row.pendiente > 0 ? 'text-destructive' : 'text-green-600'}">{formatCurrency(row.pendiente, country)}</td>
+								</tr>
+							{/each}
+						</tbody>
+						<tfoot>
+							<tr class="border-t-2 border-border font-semibold">
+								<td class="py-2 pr-4">Total</td>
+								<td class="py-2 pr-4 text-right">{formatCurrency(pendienteTotals.facturado, country)}</td>
+								<td class="py-2 pr-4 text-right">{formatCurrency(pendienteTotals.cobrado, country)}</td>
+								<td class="py-2 text-right">{formatCurrency(pendienteTotals.pendiente, country)}</td>
+							</tr>
+						</tfoot>
+					</table>
+				</div>
+			</CardContent>
+		</Card>
+	{:else}
+		<Card>
+			<CardContent class="py-12">
+				<p class="text-center text-muted-foreground">
+					No hay datos de facturacion para la configuracion seleccionada.
+				</p>
+			</CardContent>
+		</Card>
+	{/if}
+
 	{/if}
 </div>

@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const [paymentsRes, detailsRes, clientsRes, agenciesRes] = await Promise.all([
 		locals.supabase.from('payments').select('*').order('payment_date', { ascending: false }),
-		locals.supabase.from('payment_details').select('*, invoices:invoice_id(invoice_number, client_id, agency, clients(name))'),
+		locals.supabase.from('payment_details').select('*, invoices:invoice_id(invoice_number, net_value, document_type, client_id, agency, agency_id, clients(name))'),
 		clientsQuery,
 		agenciesQuery
 	]);

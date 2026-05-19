@@ -14,6 +14,7 @@
 		RotateCcw
 	} from '@lucide/svelte';
 	import type { EChartsOption } from 'echarts';
+	import { isCreditNote } from '$lib/utils/invoice-kind';
 
 	let { data } = $props();
 
@@ -45,6 +46,15 @@
 			.filter((a) => a.country === country)
 			.map((a) => ({ id: a.id, name: a.name }))
 	);
+
+	// Stable id→name map for agencies (all countries)
+	const agencyIdToName = $derived(() => {
+		const map = new Map<string, string>();
+		for (const a of data.agencies ?? []) {
+			map.set(a.id, a.name);
+		}
+		return map;
+	});
 
 	// -----------------------------------------------------------
 	// Build a lookup: payment_id -> array of its details
@@ -86,15 +96,17 @@
 
 		// Agency filter: check if ANY of the payment's details link to a selected agency
 		if (selectedAgencies.length > 0) {
-			const agencyNames = (data.agencies ?? [])
-				.filter((a) => selectedAgencies.includes(a.id))
-				.map((a) => a.name);
+			const map = agencyIdToName();
+			const agencyNames = selectedAgencies.map((id) => map.get(id)).filter(Boolean);
 
 			payments = payments.filter((p) => {
 				const details = detailsByPaymentId().get(p.id) ?? [];
 				return details.some((d) => {
-					const invoice = d.invoices as { agency: string | null } | null;
-					return invoice?.agency && agencyNames.includes(invoice.agency);
+					const invoice = d.invoices as { agency: string | null; agency_id: string | null } | null;
+					if (invoice?.agency_id) {
+						return selectedAgencies.includes(invoice.agency_id);
+					}
+					return invoice?.agency != null && agencyNames.includes(invoice.agency);
 				});
 			});
 		}
@@ -119,13 +131,15 @@
 
 		// Further filter details by agency if selected
 		if (selectedAgencies.length > 0) {
-			const agencyNames = (data.agencies ?? [])
-				.filter((a) => selectedAgencies.includes(a.id))
-				.map((a) => a.name);
+			const map = agencyIdToName();
+			const agencyNames = selectedAgencies.map((id) => map.get(id)).filter(Boolean);
 
 			details = details.filter((d) => {
-				const invoice = d.invoices as { agency: string | null } | null;
-				return invoice?.agency && agencyNames.includes(invoice.agency);
+				const invoice = d.invoices as { agency: string | null; agency_id: string | null } | null;
+				if (invoice?.agency_id) {
+					return selectedAgencies.includes(invoice.agency_id);
+				}
+				return invoice?.agency != null && agencyNames.includes(invoice.agency);
 			});
 		}
 
@@ -243,10 +257,11 @@
 	const agencyBarOptions = $derived((): EChartsOption => {
 		const details = filteredPaymentDetails();
 		const agencyRevenue = new Map<string, number>();
+		const map = agencyIdToName();
 
 		for (const d of details) {
-			const invoice = d.invoices as { agency: string | null } | null;
-			const ag = invoice?.agency || 'Directo';
+			const invoice = d.invoices as { agency: string | null; agency_id: string | null } | null;
+			const ag = (invoice?.agency_id && map.get(invoice.agency_id)) || invoice?.agency || 'Directo';
 			agencyRevenue.set(ag, (agencyRevenue.get(ag) ?? 0) + (d.amount ?? 0));
 		}
 
@@ -346,6 +361,49 @@
 			icon={Calculator}
 		/>
 	</div>
+
+	<!-- Payment Details Table -->
+	{#if filteredPaymentDetails().length > 0}
+		<div class="rounded-xl border bg-card shadow-sm overflow-hidden">
+			<h3 class="px-4 pt-4 pb-2 text-sm font-semibold">Detalle de Cobros</h3>
+			<div class="overflow-x-auto">
+				<table class="w-full text-xs">
+					<thead>
+						<tr class="border-b bg-muted/50">
+							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Certificación</th>
+							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Tipo</th>
+							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Cliente</th>
+							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Agencia</th>
+							<th class="px-4 py-2 text-right font-medium text-muted-foreground">Monto</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each filteredPaymentDetails() as detail}
+							{@const invoice = detail.invoices as { invoice_number: string | null; net_value: number | null; document_type: string | null; agency: string | null; agency_id: string | null; clients: { name: string } | null } | null}
+							<tr class="border-b last:border-0 hover:bg-muted/30">
+								<td class="px-4 py-2">
+									{invoice?.invoice_number ?? '-'}
+									{#if isCreditNote({ net_value: invoice?.net_value ?? null, document_type: invoice?.document_type ?? null })}
+										<span class="text-red-700 font-semibold">NC</span>
+									{/if}
+								</td>
+								<td class="px-4 py-2">
+									{#if isCreditNote({ net_value: invoice?.net_value ?? null, document_type: invoice?.document_type ?? null })}
+										<span class="text-red-700 font-semibold">Nota de Crédito</span>
+									{:else}
+										<span class="text-muted-foreground">Certificación</span>
+									{/if}
+								</td>
+								<td class="px-4 py-2">{invoice?.clients?.name ?? '-'}</td>
+								<td class="px-4 py-2">{(invoice?.agency_id && agencyIdToName().get(invoice.agency_id)) || invoice?.agency || 'Directo'}</td>
+								<td class="px-4 py-2 text-right">{formatCurrency(detail.amount ?? 0, country)}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Charts -->
 	<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">

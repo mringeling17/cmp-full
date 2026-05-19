@@ -4,6 +4,7 @@
 	import type { ColDef, GridOptions, GridApi, SortChangedEvent } from '@ag-grid-community/core';
 	import { formatCurrency } from '$lib/utils/currency';
 	import { formatDate } from '$lib/utils/dates';
+	import { isCreditNote } from '$lib/utils/invoice-kind';
 	import { selectedCountry } from '$lib/stores/country';
 	import { updateInvoiceField } from '$lib/stores/invoices';
 	import type { InvoiceWithClient } from '$lib/stores/invoices';
@@ -43,9 +44,15 @@
 		},
 		{
 			field: 'invoice_number',
-			headerName: 'N Factura',
+			headerName: 'Certificación',
 			width: 130,
 			pinned: 'left'
+		},
+		{
+			headerName: 'Tipo',
+			width: 130,
+			valueGetter: (p) => (isCreditNote(p.data ?? {}) ? 'Nota de Crédito' : 'Certificación'),
+			cellStyle: (p) => (isCreditNote(p.data ?? {}) ? { color: '#b91c1c', fontWeight: '600' } : null)
 		},
 		{
 			field: 'invoice_date',
