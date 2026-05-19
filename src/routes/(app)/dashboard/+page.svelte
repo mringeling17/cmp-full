@@ -51,6 +51,17 @@
 	valueLabel.subscribe((v) => (currentValueLabel = v));
 
 	// -----------------------------------------------------------
+	// Stable id→name map for agencies (all countries)
+	// -----------------------------------------------------------
+	const agencyIdToName = $derived(() => {
+		const map = new Map<string, string>();
+		for (const a of data.agencies ?? []) {
+			map.set(a.id, a.name);
+		}
+		return map;
+	});
+
+	// -----------------------------------------------------------
 	// Derive lists for filter dropdowns (scoped to country)
 	// -----------------------------------------------------------
 	const countryClients = $derived(
@@ -93,12 +104,13 @@
 			list = list.filter((inv) => inv.client_id && currentFilters.clientIds.includes(inv.client_id));
 		}
 		if (currentFilters.agencyIds.length > 0) {
+			const map = agencyIdToName();
+			const agencyNames = currentFilters.agencyIds.map((id) => map.get(id)).filter(Boolean);
 			list = list.filter((inv) => {
-				// Match by agency name since invoices store agency as string name
-				const agencyNames = (data.agencies ?? [])
-					.filter((a) => currentFilters.agencyIds.includes(a.id))
-					.map((a) => a.name);
-				return inv.agency && agencyNames.includes(inv.agency);
+				if ((inv as Record<string, unknown>).agency_id) {
+					return currentFilters.agencyIds.includes((inv as Record<string, unknown>).agency_id as string);
+				}
+				return inv.agency != null && agencyNames.includes(inv.agency);
 			});
 		}
 		if (currentFilters.channels.length > 0) {
@@ -165,10 +177,14 @@
 			);
 		}
 		if (currentFilters.agencyIds.length > 0) {
-			const agencyNames = (data.agencies ?? [])
-				.filter((a) => currentFilters.agencyIds.includes(a.id))
-				.map((a) => a.name);
-			prevInvs = prevInvs.filter((inv) => inv.agency && agencyNames.includes(inv.agency));
+			const map = agencyIdToName();
+			const agencyNames = currentFilters.agencyIds.map((id) => map.get(id)).filter(Boolean);
+			prevInvs = prevInvs.filter((inv) => {
+				if ((inv as Record<string, unknown>).agency_id) {
+					return currentFilters.agencyIds.includes((inv as Record<string, unknown>).agency_id as string);
+				}
+				return inv.agency != null && agencyNames.includes(inv.agency);
+			});
 		}
 		if (currentFilters.channels.length > 0) {
 			prevInvs = prevInvs.filter(
@@ -279,9 +295,11 @@
 	const agencyBarOptions = $derived((): EChartsOption => {
 		const invs = filteredInvoices();
 		const agencyRevenue = new Map<string, number>();
+		const map = agencyIdToName();
 
 		for (const inv of invs) {
-			const ag = inv.agency || 'Directo';
+			const agencyId = (inv as Record<string, unknown>).agency_id as string | null | undefined;
+			const ag = (agencyId ? map.get(agencyId) : undefined) ?? inv.agency ?? 'Directo';
 			agencyRevenue.set(ag, (agencyRevenue.get(ag) ?? 0) + ((inv as Record<string, any>)[currentValueField] ?? 0));
 		}
 
@@ -464,8 +482,10 @@
 
 		// Agency distribution
 		const agencyRevenue = new Map<string, number>();
+		const agMap = agencyIdToName();
 		for (const inv of invs) {
-			const ag = inv.agency || 'Directo';
+			const agencyId = (inv as Record<string, unknown>).agency_id as string | null | undefined;
+			const ag = (agencyId ? agMap.get(agencyId) : undefined) ?? inv.agency ?? 'Directo';
 			agencyRevenue.set(ag, (agencyRevenue.get(ag) ?? 0) + ((inv as any)[field] ?? 0));
 		}
 		const agencyDistribution = Array.from(agencyRevenue.entries())

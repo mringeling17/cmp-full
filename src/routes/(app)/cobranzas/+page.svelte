@@ -46,6 +46,15 @@
 			.map((a) => ({ id: a.id, name: a.name }))
 	);
 
+	// Stable id→name map for agencies (all countries)
+	const agencyIdToName = $derived(() => {
+		const map = new Map<string, string>();
+		for (const a of data.agencies ?? []) {
+			map.set(a.id, a.name);
+		}
+		return map;
+	});
+
 	// -----------------------------------------------------------
 	// Build a lookup: payment_id -> array of its details
 	// -----------------------------------------------------------
@@ -86,15 +95,17 @@
 
 		// Agency filter: check if ANY of the payment's details link to a selected agency
 		if (selectedAgencies.length > 0) {
-			const agencyNames = (data.agencies ?? [])
-				.filter((a) => selectedAgencies.includes(a.id))
-				.map((a) => a.name);
+			const map = agencyIdToName();
+			const agencyNames = selectedAgencies.map((id) => map.get(id)).filter(Boolean);
 
 			payments = payments.filter((p) => {
 				const details = detailsByPaymentId().get(p.id) ?? [];
 				return details.some((d) => {
-					const invoice = d.invoices as { agency: string | null } | null;
-					return invoice?.agency && agencyNames.includes(invoice.agency);
+					const invoice = d.invoices as { agency: string | null; agency_id: string | null } | null;
+					if (invoice?.agency_id) {
+						return selectedAgencies.includes(invoice.agency_id);
+					}
+					return invoice?.agency != null && agencyNames.includes(invoice.agency);
 				});
 			});
 		}
@@ -119,13 +130,15 @@
 
 		// Further filter details by agency if selected
 		if (selectedAgencies.length > 0) {
-			const agencyNames = (data.agencies ?? [])
-				.filter((a) => selectedAgencies.includes(a.id))
-				.map((a) => a.name);
+			const map = agencyIdToName();
+			const agencyNames = selectedAgencies.map((id) => map.get(id)).filter(Boolean);
 
 			details = details.filter((d) => {
-				const invoice = d.invoices as { agency: string | null } | null;
-				return invoice?.agency && agencyNames.includes(invoice.agency);
+				const invoice = d.invoices as { agency: string | null; agency_id: string | null } | null;
+				if (invoice?.agency_id) {
+					return selectedAgencies.includes(invoice.agency_id);
+				}
+				return invoice?.agency != null && agencyNames.includes(invoice.agency);
 			});
 		}
 
@@ -243,10 +256,11 @@
 	const agencyBarOptions = $derived((): EChartsOption => {
 		const details = filteredPaymentDetails();
 		const agencyRevenue = new Map<string, number>();
+		const map = agencyIdToName();
 
 		for (const d of details) {
-			const invoice = d.invoices as { agency: string | null } | null;
-			const ag = invoice?.agency || 'Directo';
+			const invoice = d.invoices as { agency: string | null; agency_id: string | null } | null;
+			const ag = (invoice?.agency_id && map.get(invoice.agency_id)) || invoice?.agency || 'Directo';
 			agencyRevenue.set(ag, (agencyRevenue.get(ag) ?? 0) + (d.amount ?? 0));
 		}
 
