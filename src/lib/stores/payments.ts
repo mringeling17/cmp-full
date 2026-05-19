@@ -90,6 +90,7 @@ export async function createPayment(payment: {
 	reference: string;
 	country: string;
 	notes?: string;
+	collection_month?: string | null;
 	details: { invoice_id: string; amount: number; payment_type: string }[];
 }) {
 	// Insert payment
@@ -100,7 +101,8 @@ export async function createPayment(payment: {
 			payment_date: payment.payment_date,
 			reference: payment.reference,
 			country: payment.country,
-			notes: payment.notes ?? null
+			notes: payment.notes ?? null,
+			collection_month: payment.collection_month ?? null
 		})
 		.select('id')
 		.single();

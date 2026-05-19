@@ -11,6 +11,9 @@
 	import { createSupabaseBrowserClient } from '$lib/services/supabase';
 	import { formatCurrency } from '$lib/utils/currency';
 	import { formatDate } from '$lib/utils/dates';
+	import { isCreditNote } from '$lib/utils/invoice-kind';
+	import { getTaxMultiplier } from '$lib/utils/tax';
+	import MultiSelect from '$lib/components/dashboard/MultiSelect.svelte';
 	import { toast } from 'svelte-sonner';
 	import type { InvoiceWithClient } from '$lib/stores/invoices';
 	import { ChevronLeft, ChevronRight, Search, Loader2 } from '@lucide/svelte';
@@ -43,6 +46,7 @@
 	// Step 1: Payment info
 	let amount = $state(0);
 	let paymentDate = $state('');
+	let collectionMonth = $state('');
 	let reference = $state('');
 	let notes = $state('');
 
@@ -56,10 +60,33 @@
 	let searchResults = $state<AllocationInvoice[]>([]);
 	let selectedInvoiceIds = $state<Set<string>>(new Set());
 
+	// NC tracking: map invoice_id -> isCreditNote boolean
+	let invoiceIsNC = $state<Map<string, boolean>>(new Map());
+
+	// Agency/client filter options and selections
+	let agencyOpts = $state<{ id: string; name: string }[]>([]);
+	let clientOpts = $state<{ id: string; name: string }[]>([]);
+	let selectedAgencies = $state<string[]>([]);
+	let selectedClients = $state<string[]>([]);
+
 	const hasPreselected = $derived(preselectedInvoices.length > 0);
 
+	// Compute previous month as YYYY-MM
+	function getPreviousMonth(): string {
+		const now = new Date();
+		const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+		const yyyy = d.getFullYear();
+		const mm = String(d.getMonth() + 1).padStart(2, '0');
+		return `${yyyy}-${mm}`;
+	}
+
 	// Validation
-	const step1Valid = $derived(amount > 0 && paymentDate !== '' && reference.trim() !== '');
+	const step1Valid = $derived(
+		amount > 0 &&
+			paymentDate !== '' &&
+			reference.trim() !== '' &&
+			/^\d{4}-\d{2}$/.test(collectionMonth)
+	);
 
 	const totalAllocated = $derived(
 		allocations.reduce((sum, a) => sum + (a.amount || 0), 0)
@@ -78,6 +105,7 @@
 			step = 1;
 			amount = 0;
 			paymentDate = new Date().toISOString().slice(0, 10);
+			collectionMonth = getPreviousMonth();
 			reference = '';
 			notes = '';
 			allocations = [];
@@ -85,13 +113,28 @@
 			searchQuery = '';
 			searchResults = [];
 			selectedInvoiceIds = new Set();
+			invoiceIsNC = new Map();
+			selectedAgencies = [];
+			selectedClients = [];
 			submitting = false;
 
 			if (hasPreselected) {
 				loadPreselectedInvoices();
+			} else {
+				loadFilterOptions();
 			}
 		}
 	});
+
+	async function loadFilterOptions() {
+		const supabase = createSupabaseBrowserClient();
+		const [agenciesRes, clientsRes] = await Promise.all([
+			supabase.from('agencies').select('id,name').eq('country', country).order('name'),
+			supabase.from('clients').select('id,name').eq('country', country).order('name')
+		]);
+		agencyOpts = (agenciesRes.data ?? []) as { id: string; name: string }[];
+		clientOpts = (clientsRes.data ?? []) as { id: string; name: string }[];
+	}
 
 	async function loadPreselectedInvoices() {
 		loadingInvoices = true;
@@ -111,24 +154,45 @@
 	}
 
 	async function searchInvoices() {
-		if (!searchQuery.trim()) return;
+		const hasQuery = searchQuery.trim().length > 0;
+		const hasFilters = selectedAgencies.length > 0 || selectedClients.length > 0;
+		if (!hasQuery && !hasFilters) return;
+
 		loadingInvoices = true;
 
 		const supabase = createSupabaseBrowserClient();
-		const { data } = await supabase
+		let query = supabase
 			.from('invoices')
-			.select('id, invoice_number, gross_value, client_id, clients(name)')
+			.select('id, invoice_number, gross_value, net_value, document_type, agency_id, client_id, clients(name)')
 			.eq('country', country)
-			.eq('hidden', false)
-			.or(
+			.eq('hidden', false);
+
+		if (hasQuery) {
+			query = query.or(
 				`invoice_number.ilike.%${searchQuery}%,agency.ilike.%${searchQuery}%,factura_interna.ilike.%${searchQuery}%`
-			)
-			.order('invoice_date', { ascending: false })
-			.limit(20);
+			);
+		}
+
+		if (selectedAgencies.length > 0) {
+			query = query.in('agency_id', selectedAgencies);
+		}
+
+		if (selectedClients.length > 0) {
+			query = query.in('client_id', selectedClients);
+		}
+
+		const { data } = await query.order('invoice_date', { ascending: false }).limit(20);
 
 		if (data && data.length > 0) {
 			const ids = data.map((d) => d.id);
 			const paidAmounts = await fetchInvoicePaidAmounts(ids);
+
+			// Build NC map
+			const ncMap = new Map<string, boolean>();
+			data.forEach((inv) => {
+				ncMap.set(inv.id, isCreditNote({ document_type: inv.document_type, net_value: inv.net_value }));
+			});
+			invoiceIsNC = ncMap;
 
 			searchResults = data.map((inv) => {
 				const totalPaid = paidAmounts.get(inv.id) ?? 0;
@@ -136,13 +200,14 @@
 				return {
 					id: inv.id,
 					invoice_number: inv.invoice_number ?? '',
-					client_name: (inv.clients as any)?.name ?? '-',
+					client_name: (inv.clients as { name: string } | null)?.name ?? '-',
 					gross_value: grossValue,
 					total_paid: totalPaid
 				};
 			});
 		} else {
 			searchResults = [];
+			invoiceIsNC = new Map();
 		}
 
 		loadingInvoices = false;
@@ -171,7 +236,12 @@
 		submitting = true;
 
 		try {
-			const validAllocations = allocations.filter((a) => a.amount > 0);
+			const validAllocations = allocations
+				.filter((a) => a.amount > 0)
+				.map((a) => ({
+					...a,
+					payment_type: invoiceIsNC.get(a.invoice_id) ? 'credit_note' : a.payment_type
+				}));
 
 			await createPayment({
 				amount,
@@ -179,6 +249,7 @@
 				reference,
 				country,
 				notes: notes || undefined,
+				collection_month: collectionMonth || null,
 				details: validAllocations
 			});
 
@@ -241,7 +312,7 @@
 		<!-- Step 1: Payment Info -->
 		{#if step === 1}
 			<div class="space-y-4">
-				<div class="grid grid-cols-2 gap-4">
+				<div class="grid grid-cols-3 gap-4">
 					<div class="space-y-2">
 						<Label for="pay-amount">Monto</Label>
 						<Input
@@ -256,6 +327,10 @@
 					<div class="space-y-2">
 						<Label for="pay-date">Fecha</Label>
 						<Input id="pay-date" type="date" bind:value={paymentDate} />
+					</div>
+					<div class="space-y-2">
+						<Label for="pay-collection">Mes de cobranza</Label>
+						<Input id="pay-collection" type="month" bind:value={collectionMonth} />
 					</div>
 				</div>
 				<div class="space-y-2">
@@ -290,6 +365,28 @@
 		{#if step === 2}
 			<div class="space-y-4">
 				{#if !hasPreselected}
+					<!-- Agency/client filters -->
+					{#if agencyOpts.length > 0 || clientOpts.length > 0}
+						<div class="flex items-center gap-2 flex-wrap">
+							{#if agencyOpts.length > 0}
+								<MultiSelect
+									label="Agencia"
+									items={agencyOpts}
+									bind:selected={selectedAgencies}
+									searchable
+								/>
+							{/if}
+							{#if clientOpts.length > 0}
+								<MultiSelect
+									label="Cliente"
+									items={clientOpts}
+									bind:selected={selectedClients}
+									searchable
+								/>
+							{/if}
+						</div>
+					{/if}
+
 					<!-- Search for invoices -->
 					<div class="flex items-center gap-2">
 						<div class="relative flex-1">
@@ -318,14 +415,16 @@
 									<tr class="border-b bg-muted/50 sticky top-0">
 										<th class="px-3 py-2 w-8"></th>
 										<th class="px-3 py-2 text-left font-medium">Factura</th>
+										<th class="px-3 py-2 text-left font-medium">Tipo</th>
 										<th class="px-3 py-2 text-left font-medium">Cliente</th>
-										<th class="px-3 py-2 text-right font-medium">Bruto</th>
+										<th class="px-3 py-2 text-right font-medium">Total c/IVA</th>
 										<th class="px-3 py-2 text-right font-medium">Pendiente</th>
 									</tr>
 								</thead>
 								<tbody>
 									{#each searchResults as invoice}
 										{@const remaining = (invoice.gross_value ?? 0) - invoice.total_paid}
+										{@const isNC = invoiceIsNC.get(invoice.id) ?? false}
 										<tr
 											class="border-b last:border-0 cursor-pointer hover:bg-muted/50"
 											onclick={() => toggleInvoiceSelection(invoice)}
@@ -340,9 +439,16 @@
 												/>
 											</td>
 											<td class="px-3 py-2 font-mono text-xs">{invoice.invoice_number}</td>
+											<td class="px-3 py-2 text-xs">
+												{#if isNC}
+													<span class="font-bold text-destructive">NC</span>
+												{:else}
+													Cert.
+												{/if}
+											</td>
 											<td class="px-3 py-2 text-xs">{invoice.client_name}</td>
 											<td class="px-3 py-2 text-right text-xs">
-												{formatCurrency(invoice.gross_value, country)}
+												{formatCurrency((invoice.gross_value ?? 0) * getTaxMultiplier(country), country)}
 											</td>
 											<td class="px-3 py-2 text-right">
 												<Badge variant={remaining <= 0 ? 'default' : 'outline'}>
@@ -412,6 +518,10 @@
 							<span class="font-medium ml-1">{formatDate(paymentDate)}</span>
 						</div>
 						<div>
+							<span class="text-muted-foreground">Mes de cobranza:</span>
+							<span class="font-medium ml-1">{collectionMonth}</span>
+						</div>
+						<div>
 							<span class="text-muted-foreground">Referencia:</span>
 							<span class="font-medium ml-1">{reference}</span>
 						</div>
@@ -440,8 +550,9 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each allocations.filter((a) => a.amount > 0) as alloc, i}
+								{#each allocations.filter((a) => a.amount > 0) as alloc}
 									{@const invoice = allocationInvoices.find((inv) => inv.id === alloc.invoice_id)}
+									{@const isNC = invoiceIsNC.get(alloc.invoice_id) ?? false}
 									<tr class="border-b last:border-0">
 										<td class="px-3 py-2 font-mono text-xs">
 											{invoice?.invoice_number ?? '-'}
@@ -452,7 +563,7 @@
 										</td>
 										<td class="px-3 py-2">
 											<Badge variant="secondary">
-												{PAYMENT_TYPE_LABELS[alloc.payment_type] ?? alloc.payment_type}
+												{PAYMENT_TYPE_LABELS[isNC ? 'credit_note' : alloc.payment_type] ?? alloc.payment_type}
 											</Badge>
 										</td>
 									</tr>
