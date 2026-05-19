@@ -43,7 +43,7 @@
 		},
 		{
 			field: 'invoice_number',
-			headerName: 'N Factura',
+			headerName: 'Certificación',
 			width: 130,
 			pinned: 'left'
 		},
