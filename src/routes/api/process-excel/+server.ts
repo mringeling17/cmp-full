@@ -148,6 +148,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					net_value: row.netValue,
 					channel: row.channel,
 					agency: row.agency,
+					agency_id: agency.id,
 					order_reference: row.orderReference,
 					client_id: client.id,
 					country,
