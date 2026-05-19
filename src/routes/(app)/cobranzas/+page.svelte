@@ -14,6 +14,7 @@
 		RotateCcw
 	} from '@lucide/svelte';
 	import type { EChartsOption } from 'echarts';
+	import { isCreditNote } from '$lib/utils/invoice-kind';
 
 	let { data } = $props();
 
@@ -360,6 +361,49 @@
 			icon={Calculator}
 		/>
 	</div>
+
+	<!-- Payment Details Table -->
+	{#if filteredPaymentDetails().length > 0}
+		<div class="rounded-xl border bg-card shadow-sm overflow-hidden">
+			<h3 class="px-4 pt-4 pb-2 text-sm font-semibold">Detalle de Cobros</h3>
+			<div class="overflow-x-auto">
+				<table class="w-full text-xs">
+					<thead>
+						<tr class="border-b bg-muted/50">
+							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Certificación</th>
+							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Tipo</th>
+							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Cliente</th>
+							<th class="px-4 py-2 text-left font-medium text-muted-foreground">Agencia</th>
+							<th class="px-4 py-2 text-right font-medium text-muted-foreground">Monto</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each filteredPaymentDetails() as detail}
+							{@const invoice = detail.invoices as { invoice_number: string | null; net_value: number | null; document_type: string | null; agency: string | null; agency_id: string | null; clients: { name: string } | null } | null}
+							<tr class="border-b last:border-0 hover:bg-muted/30">
+								<td class="px-4 py-2">
+									{invoice?.invoice_number ?? '-'}
+									{#if isCreditNote({ net_value: invoice?.net_value ?? null, document_type: invoice?.document_type ?? null })}
+										<span class="text-red-700 font-semibold">NC</span>
+									{/if}
+								</td>
+								<td class="px-4 py-2">
+									{#if isCreditNote({ net_value: invoice?.net_value ?? null, document_type: invoice?.document_type ?? null })}
+										<span class="text-red-700 font-semibold">Nota de Crédito</span>
+									{:else}
+										<span class="text-muted-foreground">Certificación</span>
+									{/if}
+								</td>
+								<td class="px-4 py-2">{invoice?.clients?.name ?? '-'}</td>
+								<td class="px-4 py-2">{(invoice?.agency_id && agencyIdToName().get(invoice.agency_id)) || invoice?.agency || 'Directo'}</td>
+								<td class="px-4 py-2 text-right">{formatCurrency(detail.amount ?? 0, country)}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Charts -->
 	<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
