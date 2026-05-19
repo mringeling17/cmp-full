@@ -381,6 +381,7 @@ export type Database = {
 					due_date: string | null;
 					exhibition_month: string | null;
 					hidden: boolean;
+					agency_id: string | null;
 				};
 				Insert: {
 					id?: string;
@@ -411,6 +412,7 @@ export type Database = {
 					due_date?: string | null;
 					exhibition_month?: string | null;
 					hidden?: boolean;
+					agency_id?: string | null;
 				};
 				Update: {
 					id?: string;
@@ -441,6 +443,7 @@ export type Database = {
 					due_date?: string | null;
 					exhibition_month?: string | null;
 					hidden?: boolean;
+					agency_id?: string | null;
 				};
 				Relationships: [
 					{
@@ -550,6 +553,7 @@ export type Database = {
 					reference: string;
 					country: string;
 					notes: string | null;
+					collection_month: string | null;
 					created_at: string;
 				};
 				Insert: {
@@ -559,6 +563,7 @@ export type Database = {
 					reference: string;
 					country?: string;
 					notes?: string | null;
+					collection_month?: string | null;
 					created_at?: string;
 				};
 				Update: {
@@ -568,6 +573,7 @@ export type Database = {
 					reference?: string;
 					country?: string;
 					notes?: string | null;
+					collection_month?: string | null;
 					created_at?: string;
 				};
 				Relationships: [];
