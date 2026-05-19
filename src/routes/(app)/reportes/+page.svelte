@@ -389,10 +389,20 @@
 			cobradoMap.set(key, (cobradoMap.get(key) ?? 0) + amount);
 		}
 
-		// Merge
+		// Merge (union of facturadoMap and cobradoMap keys)
+		const allKeys = new Set([...facturadoMap.keys(), ...cobradoMap.keys()]);
 		const rows: PendienteRow[] = [];
-		for (const [key, { nombre, valor: facturado }] of facturadoMap.entries()) {
+		for (const key of allKeys) {
+			const facturado = facturadoMap.get(key)?.valor ?? 0;
 			const cobrado = cobradoMap.get(key) ?? 0;
+			let nombre: string;
+			if (facturadoMap.has(key)) {
+				nombre = facturadoMap.get(key)!.nombre;
+			} else if (pendienteGroup === 'agency') {
+				nombre = agencyIdsToNames.get(key) ?? 'Sin agencia';
+			} else {
+				nombre = clientsMap.get(key) ?? 'Sin cliente';
+			}
 			rows.push({ grupo: nombre, facturado, cobrado, pendiente: facturado - cobrado });
 		}
 
