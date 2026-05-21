@@ -84,14 +84,14 @@
 		},
 		{
 			field: 'factura_interna',
-			headerName: 'N Interno',
+			headerName: 'N° Xubio',
 			width: 140,
 			editable: true,
 			cellStyle: { cursor: 'pointer' }
 		},
 		{
 			field: 'credit_note',
-			headerName: 'Nota Credito',
+			headerName: 'N° NC Xubio',
 			width: 140,
 			editable: true,
 			cellStyle: { cursor: 'pointer' }

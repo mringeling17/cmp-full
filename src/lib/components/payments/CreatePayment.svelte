@@ -57,11 +57,26 @@
 
 	// Standalone invoice search (when no preselected invoices)
 	let searchQuery = $state('');
-	let searchResults = $state<AllocationInvoice[]>([]);
 	let selectedInvoiceIds = $state<Set<string>>(new Set());
 
 	// NC tracking: map invoice_id -> isCreditNote boolean
 	let invoiceIsNC = $state<Map<string, boolean>>(new Map());
+
+	// Xubio number tracking: map invoice_id -> { factura_interna, credit_note }
+	let invoiceXubio = $state<Map<string, { factura_interna: string | null; credit_note: string | null }>>(new Map());
+
+	// Solo pendientes filter (only when no preselected)
+	let onlyPending = $state(true);
+
+	// Raw search results (before pending filter)
+	let searchResultsAll = $state<AllocationInvoice[]>([]);
+
+	// Derived filtered results
+	const searchResults = $derived(
+		onlyPending
+			? searchResultsAll.filter((inv) => (inv.gross_value ?? 0) - inv.total_paid > 0.01)
+			: searchResultsAll
+	);
 
 	// Agency/client filter options and selections
 	let agencyOpts = $state<{ id: string; name: string }[]>([]);
@@ -111,9 +126,10 @@
 			allocations = [];
 			allocationInvoices = [];
 			searchQuery = '';
-			searchResults = [];
+			searchResultsAll = [];
 			selectedInvoiceIds = new Set();
 			invoiceIsNC = new Map();
+			invoiceXubio = new Map();
 			selectedAgencies = [];
 			selectedClients = [];
 			submitting = false;
@@ -163,13 +179,13 @@
 		const supabase = createSupabaseBrowserClient();
 		let query = supabase
 			.from('invoices')
-			.select('id, invoice_number, gross_value, net_value, document_type, agency_id, client_id, clients(name)')
+			.select('id, invoice_number, gross_value, net_value, document_type, agency_id, client_id, factura_interna, credit_note, clients(name)')
 			.eq('country', country)
 			.eq('hidden', false);
 
 		if (hasQuery) {
 			query = query.or(
-				`invoice_number.ilike.%${searchQuery}%,agency.ilike.%${searchQuery}%,factura_interna.ilike.%${searchQuery}%`
+				`invoice_number.ilike.%${searchQuery}%,agency.ilike.%${searchQuery}%,factura_interna.ilike.%${searchQuery}%,credit_note.ilike.%${searchQuery}%`
 			);
 		}
 
@@ -181,7 +197,7 @@
 			query = query.in('client_id', selectedClients);
 		}
 
-		const { data } = await query.order('invoice_date', { ascending: false }).limit(20);
+		const { data } = await query.order('invoice_date', { ascending: false }).limit(hasFilters ? 500 : 20);
 
 		if (data && data.length > 0) {
 			const ids = data.map((d) => d.id);
@@ -194,7 +210,17 @@
 			});
 			invoiceIsNC = ncMap;
 
-			searchResults = data.map((inv) => {
+			// Build Xubio numbers map
+			const xubioMap = new Map<string, { factura_interna: string | null; credit_note: string | null }>();
+			data.forEach((inv) => {
+				xubioMap.set(inv.id, {
+					factura_interna: (inv as { factura_interna?: string | null }).factura_interna ?? null,
+					credit_note: (inv as { credit_note?: string | null }).credit_note ?? null
+				});
+			});
+			invoiceXubio = xubioMap;
+
+			searchResultsAll = data.map((inv) => {
 				const totalPaid = paidAmounts.get(inv.id) ?? 0;
 				const grossValue = inv.gross_value ?? 0;
 				return {
@@ -206,8 +232,9 @@
 				};
 			});
 		} else {
-			searchResults = [];
+			searchResultsAll = [];
 			invoiceIsNC = new Map();
+			invoiceXubio = new Map();
 		}
 
 		loadingInvoices = false;
@@ -406,6 +433,14 @@
 								Buscar
 							{/if}
 						</Button>
+						<label class="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none whitespace-nowrap">
+							<input
+								type="checkbox"
+								bind:checked={onlyPending}
+								class="h-3.5 w-3.5"
+							/>
+							Solo pendientes
+						</label>
 					</div>
 
 					{#if searchResults.length > 0}
@@ -416,6 +451,8 @@
 										<th class="px-3 py-2 w-8"></th>
 										<th class="px-3 py-2 text-left font-medium">Factura</th>
 										<th class="px-3 py-2 text-left font-medium">Tipo</th>
+										<th class="px-3 py-2 text-left font-medium">N° Xubio</th>
+										<th class="px-3 py-2 text-left font-medium">N° NC Xubio</th>
 										<th class="px-3 py-2 text-left font-medium">Cliente</th>
 										<th class="px-3 py-2 text-right font-medium">Total c/IVA</th>
 										<th class="px-3 py-2 text-right font-medium">Pendiente</th>
@@ -446,6 +483,8 @@
 													Cert.
 												{/if}
 											</td>
+											<td class="px-3 py-2 font-mono text-xs">{invoiceXubio.get(invoice.id)?.factura_interna ?? '-'}</td>
+											<td class="px-3 py-2 font-mono text-xs">{invoiceXubio.get(invoice.id)?.credit_note ?? '-'}</td>
 											<td class="px-3 py-2 text-xs">{invoice.client_name}</td>
 											<td class="px-3 py-2 text-right text-xs">
 												{formatCurrency((invoice.gross_value ?? 0) * getTaxMultiplier(country), country)}
