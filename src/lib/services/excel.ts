@@ -423,6 +423,8 @@ export interface CreditNoteMatch {
 	comprobante: string;
 	observacion: string;
 	commission: number;
+	invoiceNumber: string;
+	documentType: string;
 }
 
 export function crossInvoiceSummaryWithXubio(
@@ -447,7 +449,9 @@ export function crossInvoiceSummaryWithXubio(
 				clienteXubio: xubio.cliente,
 				comprobante: xubio.comprobante,
 				observacion: obs,
-				commission: inv.commissionAmount ?? 0
+				commission: inv.commissionAmount ?? 0,
+				invoiceNumber: inv.invoiceNumber,
+				documentType: inv.documentType ?? ''
 			});
 		} else {
 			unmatched.push(obs);

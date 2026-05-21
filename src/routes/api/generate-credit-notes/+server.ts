@@ -103,6 +103,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			}, { status: 400 });
 		}
 
+		// 3.5 Auto-backfill: para cada match, si la factura original todavía no
+		// tiene factura_interna cargado, escribir el comprobante (N° Xubio) que
+		// devolvió el archivo Xubio. NO pisa valores ya ingresados a mano.
+		const exhibitionMonth = `${year}-${String(month).padStart(2, '0')}`;
+		let backfilled = 0;
+		for (const m of matches) {
+			const { error: updErr, count } = await supabase
+				.from('invoices')
+				.update({ factura_interna: m.comprobante }, { count: 'exact' })
+				.eq('invoice_number', m.invoiceNumber)
+				.eq('exhibition_month', exhibitionMonth)
+				.eq('country', country)
+				.eq('document_type', m.documentType)
+				.or('factura_interna.is.null,factura_interna.eq.');
+			if (updErr) {
+				console.error('[generate-credit-notes] backfill factura_interna error:', updErr.message);
+			} else if (count) {
+				backfilled += count;
+			}
+		}
+
 		// 4. Generate credit notes Excel
 		const outputBuffer = generateCreditNotesExcel(matches, month, year, country);
 
@@ -148,7 +169,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		await supabase.from('files_log').insert({
 			path: outputFilename,
 			status: LOG_STATUS.SUCCESS,
-			message: `Generated ${matches.length} credit notes. ${unmatched.length} unmatched invoices.`,
+			message: `Generated ${matches.length} credit notes. ${unmatched.length} unmatched invoices. ${backfilled} facturas con N° Xubio backfilleado.`,
 			created_at: new Date().toISOString()
 		});
 
@@ -156,6 +177,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			success: true,
 			matched: matches.length,
 			unmatched: unmatched.length,
+			backfilled,
 			unmatchedSample: unmatched.slice(0, 5),
 			outputPath,
 			outputFilename
