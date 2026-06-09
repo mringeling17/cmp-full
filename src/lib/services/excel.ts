@@ -21,26 +21,34 @@ import { XUBIO } from '$lib/config/xubio';
 import { previousMonthPeriod } from '$lib/utils/period';
 import { calculateTax } from '$lib/utils/tax';
 
-/** Returns the month number found in the filename, or null if none. */
+/** Returns the month number found in the filename, or null if none.
+ *  Matches a part that EQUALS a month name (mayo, may, septiembre, ...) o que
+ *  empieza con el nombre del mes seguido SOLO de dígitos (ej. "mayo2026"),
+ *  para tolerar filenames con mes+año pegados sin separador. */
 export function extractMonthFromFilename(filename: string): number | null {
 	const parts = filename.toLowerCase().split(/[_\-.\s]+/);
 	const sortedMonths = Object.entries(MONTH_MAP).sort((a, b) => b[0].length - a[0].length);
 	for (const part of parts) {
 		for (const [name, num] of sortedMonths) {
 			if (part === name) return num;
+			if (part.startsWith(name)) {
+				const rest = part.slice(name.length);
+				if (rest === '' || /^\d+$/.test(rest)) return num;
+			}
 		}
 	}
 	return null;
 }
 
-/** Returns the 4-digit year found in the filename, or null if none. */
+/** Returns the 4-digit year found in the filename, or null if none.
+ *  Busca con regex global para captar también años embebidos en una parte
+ *  (ej. "mayo2026" o "abril26" no — pero "2026" dentro de "mayo2026" sí). */
 export function extractYearFromFilename(filename: string): number | null {
-	const parts = filename.split(/[_\-.\s]+/);
-	for (const part of parts) {
-		if (/^\d{4}$/.test(part)) {
-			const y = parseInt(part);
-			if (y >= MIN_YEAR && y <= MAX_YEAR) return y;
-		}
+	const matches = filename.match(/\d{4}/g);
+	if (!matches) return null;
+	for (const s of matches) {
+		const y = parseInt(s);
+		if (y >= MIN_YEAR && y <= MAX_YEAR) return y;
 	}
 	return null;
 }
